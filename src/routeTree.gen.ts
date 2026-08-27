@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as JobsRouteImport } from './routes/jobs'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LogsRouteImport } from './routes/logs'
+import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as SchedulerRouteImport } from './routes/scheduler'
 import { Route as SubmitRouteImport } from './routes/submit'
 import { Route as ApiEngineSplatRouteImport } from './routes/api/engine/$'
@@ -37,6 +38,11 @@ const LogsRoute = LogsRouteImport.update({
   path: '/logs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResourcesRoute = ResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SchedulerRoute = SchedulerRouteImport.update({
   id: '/scheduler',
   path: '/scheduler',
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/jobs': typeof JobsRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/resources': typeof ResourcesRoute
   '/scheduler': typeof SchedulerRoute
   '/submit': typeof SubmitRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/jobs': typeof JobsRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/resources': typeof ResourcesRoute
   '/scheduler': typeof SchedulerRoute
   '/submit': typeof SubmitRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/jobs': typeof JobsRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/resources': typeof ResourcesRoute
   '/scheduler': typeof SchedulerRoute
   '/submit': typeof SubmitRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/login'
     | '/logs'
+    | '/resources'
     | '/scheduler'
     | '/submit'
     | '/api/engine/$'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/login'
     | '/logs'
+    | '/resources'
     | '/scheduler'
     | '/submit'
     | '/api/engine/$'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/login'
     | '/logs'
+    | '/resources'
     | '/scheduler'
     | '/submit'
     | '/api/engine/$'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   JobsRoute: typeof JobsRoute
   LoginRoute: typeof LoginRoute
   LogsRoute: typeof LogsRoute
+  ResourcesRoute: typeof ResourcesRoute
   SchedulerRoute: typeof SchedulerRoute
   SubmitRoute: typeof SubmitRoute
   ApiEngineSplatRoute: typeof ApiEngineSplatRoute
@@ -151,6 +164,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LogsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/resources': {
+      id: '/resources'
+      path: '/resources'
+      fullPath: '/resources'
+      preLoaderRoute: typeof ResourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/scheduler': {
       id: '/scheduler'
       path: '/scheduler'
@@ -180,6 +200,7 @@ const rootRouteChildren: RootRouteChildren = {
   JobsRoute: JobsRoute,
   LoginRoute: LoginRoute,
   LogsRoute: LogsRoute,
+  ResourcesRoute: ResourcesRoute,
   SchedulerRoute: SchedulerRoute,
   SubmitRoute: SubmitRoute,
   ApiEngineSplatRoute: ApiEngineSplatRoute,
