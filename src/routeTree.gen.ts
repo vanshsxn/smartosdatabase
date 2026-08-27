@@ -16,6 +16,7 @@ import { Route as LogsRouteImport } from './routes/logs'
 import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as SchedulerRouteImport } from './routes/scheduler'
 import { Route as SubmitRouteImport } from './routes/submit'
+import { Route as TenantsRouteImport } from './routes/tenants'
 import { Route as ApiEngineSplatRouteImport } from './routes/api/engine/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -53,6 +54,11 @@ const SubmitRoute = SubmitRouteImport.update({
   path: '/submit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TenantsRoute = TenantsRouteImport.update({
+  id: '/tenants',
+  path: '/tenants',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiEngineSplatRoute = ApiEngineSplatRouteImport.update({
   id: '/api/engine/$',
   path: '/api/engine/$',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/resources': typeof ResourcesRoute
   '/scheduler': typeof SchedulerRoute
   '/submit': typeof SubmitRoute
+  '/tenants': typeof TenantsRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
 }
 export interface FileRoutesByTo {
@@ -77,6 +84,7 @@ export interface FileRoutesByTo {
   '/resources': typeof ResourcesRoute
   '/scheduler': typeof SchedulerRoute
   '/submit': typeof SubmitRoute
+  '/tenants': typeof TenantsRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
 }
 export interface FileRoutesById {
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/resources': typeof ResourcesRoute
   '/scheduler': typeof SchedulerRoute
   '/submit': typeof SubmitRoute
+  '/tenants': typeof TenantsRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
 }
 export interface FileRouteTypes {
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
     | '/resources'
     | '/scheduler'
     | '/submit'
+    | '/tenants'
     | '/api/engine/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
     | '/resources'
     | '/scheduler'
     | '/submit'
+    | '/tenants'
     | '/api/engine/$'
   id:
     | '__root__'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
     | '/resources'
     | '/scheduler'
     | '/submit'
+    | '/tenants'
     | '/api/engine/$'
   fileRoutesById: FileRoutesById
 }
@@ -131,6 +143,7 @@ export interface RootRouteChildren {
   ResourcesRoute: typeof ResourcesRoute
   SchedulerRoute: typeof SchedulerRoute
   SubmitRoute: typeof SubmitRoute
+  TenantsRoute: typeof TenantsRoute
   ApiEngineSplatRoute: typeof ApiEngineSplatRoute
 }
 
@@ -185,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubmitRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tenants': {
+      id: '/tenants'
+      path: '/tenants'
+      fullPath: '/tenants'
+      preLoaderRoute: typeof TenantsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/engine/$': {
       id: '/api/engine/$'
       path: '/api/engine/$'
@@ -203,6 +223,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResourcesRoute: ResourcesRoute,
   SchedulerRoute: SchedulerRoute,
   SubmitRoute: SubmitRoute,
+  TenantsRoute: TenantsRoute,
   ApiEngineSplatRoute: ApiEngineSplatRoute,
 }
 export const routeTree = rootRouteImport
