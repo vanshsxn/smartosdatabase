@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as JobsRouteImport } from './routes/jobs'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LogsRouteImport } from './routes/logs'
+import { Route as SubmitRouteImport } from './routes/submit'
 import { Route as ApiEngineSplatRouteImport } from './routes/api/engine/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,6 +36,11 @@ const LogsRoute = LogsRouteImport.update({
   path: '/logs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SubmitRoute = SubmitRouteImport.update({
+  id: '/submit',
+  path: '/submit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiEngineSplatRoute = ApiEngineSplatRouteImport.update({
   id: '/api/engine/$',
   path: '/api/engine/$',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/jobs': typeof JobsRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/submit': typeof SubmitRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/jobs': typeof JobsRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/submit': typeof SubmitRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,22 @@ export interface FileRoutesById {
   '/jobs': typeof JobsRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/submit': typeof SubmitRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/jobs' | '/login' | '/logs' | '/api/engine/$'
+  fullPaths: '/' | '/jobs' | '/login' | '/logs' | '/submit' | '/api/engine/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/jobs' | '/login' | '/logs' | '/api/engine/$'
-  id: '__root__' | '/' | '/jobs' | '/login' | '/logs' | '/api/engine/$'
+  to: '/' | '/jobs' | '/login' | '/logs' | '/submit' | '/api/engine/$'
+  id:
+    | '__root__'
+    | '/'
+    | '/jobs'
+    | '/login'
+    | '/logs'
+    | '/submit'
+    | '/api/engine/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +92,7 @@ export interface RootRouteChildren {
   JobsRoute: typeof JobsRoute
   LoginRoute: typeof LoginRoute
   LogsRoute: typeof LogsRoute
+  SubmitRoute: typeof SubmitRoute
   ApiEngineSplatRoute: typeof ApiEngineSplatRoute
 }
 
@@ -109,6 +126,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LogsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/submit': {
+      id: '/submit'
+      path: '/submit'
+      fullPath: '/submit'
+      preLoaderRoute: typeof SubmitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/engine/$': {
       id: '/api/engine/$'
       path: '/api/engine/$'
@@ -124,6 +148,7 @@ const rootRouteChildren: RootRouteChildren = {
   JobsRoute: JobsRoute,
   LoginRoute: LoginRoute,
   LogsRoute: LogsRoute,
+  SubmitRoute: SubmitRoute,
   ApiEngineSplatRoute: ApiEngineSplatRoute,
 }
 export const routeTree = rootRouteImport
