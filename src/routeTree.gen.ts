@@ -10,11 +10,71 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BillingRouteImport } from './routes/billing'
+import { Route as JobsRouteImport } from './routes/jobs'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as LogsRouteImport } from './routes/logs'
+import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as ResourcesRouteImport } from './routes/resources'
+import { Route as SchedulerRouteImport } from './routes/scheduler'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SubmitRouteImport } from './routes/submit'
+import { Route as TenantsRouteImport } from './routes/tenants'
 import { Route as ApiEngineSplatRouteImport } from './routes/api/engine/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BillingRoute = BillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JobsRoute = JobsRouteImport.update({
+  id: '/jobs',
+  path: '/jobs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogsRoute = LogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResourcesRoute = ResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SchedulerRoute = SchedulerRouteImport.update({
+  id: '/scheduler',
+  path: '/scheduler',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubmitRoute = SubmitRouteImport.update({
+  id: '/submit',
+  path: '/submit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TenantsRoute = TenantsRouteImport.update({
+  id: '/tenants',
+  path: '/tenants',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiEngineSplatRoute = ApiEngineSplatRouteImport.update({
@@ -25,27 +85,104 @@ const ApiEngineSplatRoute = ApiEngineSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/billing': typeof BillingRoute
+  '/jobs': typeof JobsRoute
+  '/login': typeof LoginRoute
+  '/logs': typeof LogsRoute
+  '/reports': typeof ReportsRoute
+  '/resources': typeof ResourcesRoute
+  '/scheduler': typeof SchedulerRoute
+  '/settings': typeof SettingsRoute
+  '/submit': typeof SubmitRoute
+  '/tenants': typeof TenantsRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/billing': typeof BillingRoute
+  '/jobs': typeof JobsRoute
+  '/login': typeof LoginRoute
+  '/logs': typeof LogsRoute
+  '/reports': typeof ReportsRoute
+  '/resources': typeof ResourcesRoute
+  '/scheduler': typeof SchedulerRoute
+  '/settings': typeof SettingsRoute
+  '/submit': typeof SubmitRoute
+  '/tenants': typeof TenantsRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/billing': typeof BillingRoute
+  '/jobs': typeof JobsRoute
+  '/login': typeof LoginRoute
+  '/logs': typeof LogsRoute
+  '/reports': typeof ReportsRoute
+  '/resources': typeof ResourcesRoute
+  '/scheduler': typeof SchedulerRoute
+  '/settings': typeof SettingsRoute
+  '/submit': typeof SubmitRoute
+  '/tenants': typeof TenantsRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/engine/$'
+  fullPaths:
+    | '/'
+    | '/billing'
+    | '/jobs'
+    | '/login'
+    | '/logs'
+    | '/reports'
+    | '/resources'
+    | '/scheduler'
+    | '/settings'
+    | '/submit'
+    | '/tenants'
+    | '/api/engine/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/engine/$'
-  id: '__root__' | '/' | '/api/engine/$'
+  to:
+    | '/'
+    | '/billing'
+    | '/jobs'
+    | '/login'
+    | '/logs'
+    | '/reports'
+    | '/resources'
+    | '/scheduler'
+    | '/settings'
+    | '/submit'
+    | '/tenants'
+    | '/api/engine/$'
+  id:
+    | '__root__'
+    | '/'
+    | '/billing'
+    | '/jobs'
+    | '/login'
+    | '/logs'
+    | '/reports'
+    | '/resources'
+    | '/scheduler'
+    | '/settings'
+    | '/submit'
+    | '/tenants'
+    | '/api/engine/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BillingRoute: typeof BillingRoute
+  JobsRoute: typeof JobsRoute
+  LoginRoute: typeof LoginRoute
+  LogsRoute: typeof LogsRoute
+  ReportsRoute: typeof ReportsRoute
+  ResourcesRoute: typeof ResourcesRoute
+  SchedulerRoute: typeof SchedulerRoute
+  SettingsRoute: typeof SettingsRoute
+  SubmitRoute: typeof SubmitRoute
+  TenantsRoute: typeof TenantsRoute
   ApiEngineSplatRoute: typeof ApiEngineSplatRoute
 }
 
@@ -56,6 +193,76 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/billing': {
+      id: '/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof BillingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/jobs': {
+      id: '/jobs'
+      path: '/jobs'
+      fullPath: '/jobs'
+      preLoaderRoute: typeof JobsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logs': {
+      id: '/logs'
+      path: '/logs'
+      fullPath: '/logs'
+      preLoaderRoute: typeof LogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/resources': {
+      id: '/resources'
+      path: '/resources'
+      fullPath: '/resources'
+      preLoaderRoute: typeof ResourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scheduler': {
+      id: '/scheduler'
+      path: '/scheduler'
+      fullPath: '/scheduler'
+      preLoaderRoute: typeof SchedulerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/submit': {
+      id: '/submit'
+      path: '/submit'
+      fullPath: '/submit'
+      preLoaderRoute: typeof SubmitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tenants': {
+      id: '/tenants'
+      path: '/tenants'
+      fullPath: '/tenants'
+      preLoaderRoute: typeof TenantsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/engine/$': {
@@ -70,6 +277,16 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BillingRoute: BillingRoute,
+  JobsRoute: JobsRoute,
+  LoginRoute: LoginRoute,
+  LogsRoute: LogsRoute,
+  ReportsRoute: ReportsRoute,
+  ResourcesRoute: ResourcesRoute,
+  SchedulerRoute: SchedulerRoute,
+  SettingsRoute: SettingsRoute,
+  SubmitRoute: SubmitRoute,
+  TenantsRoute: TenantsRoute,
   ApiEngineSplatRoute: ApiEngineSplatRoute,
 }
 export const routeTree = rootRouteImport

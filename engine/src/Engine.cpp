@@ -159,9 +159,19 @@ void Engine::setPolicy(const std::string& policy) {
 
 std::string Engine::policy() const { return policyName_; }
 
+void Engine::setPaused(bool paused) {
+    if (paused_.exchange(paused) == paused) return;
+    Logger::instance().warn("engine", -1, paused ? "Dispatcher paused by operator"
+                                                 : "Dispatcher resumed by operator");
+}
+
 void Engine::dispatchLoop() {
     Logger::instance().info("dispatcher", -1, "Dispatcher loop online");
     while (running_.load()) {
+        if (paused_.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            continue;
+        }
         Scheduler* sched = activeScheduler();
 
         AdmissionCheck admit = [this](const Job& job, std::string& why) {
@@ -356,6 +366,11 @@ double Engine::tenantCredits(const std::string& tenantId) const {
     std::lock_guard<std::mutex> lock(creditsMutex_);
     auto it = credits_.find(tenantId);
     return it == credits_.end() ? 1000.0 : it->second;
+}
+
+std::map<std::string, double> Engine::allTenantCredits() const {
+    std::lock_guard<std::mutex> lock(creditsMutex_);
+    return std::map<std::string, double>(credits_.begin(), credits_.end());
 }
 
 }  // namespace mvcc
