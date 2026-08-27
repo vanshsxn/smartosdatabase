@@ -116,6 +116,20 @@ export interface Health {
   engine: string;
   policy: string;
   workers: number;
+  paused?: boolean;
+}
+
+export interface TenantCredit {
+  tenantId: string;
+  credits: number;
+}
+
+export interface TenantsResponse {
+  tenants: TenantCredit[];
+}
+
+export interface PauseResult {
+  paused: boolean;
 }
 
 export interface LogEntry {

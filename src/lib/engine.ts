@@ -8,6 +8,7 @@ import type {
   LogsResponse,
   MemoryStats,
   Metrics,
+  PauseResult,
   PolicyResult,
   QueueState,
   Resources,
@@ -15,6 +16,8 @@ import type {
   SetPolicyRequest,
   SubmitJobRequest,
   SubmitResult,
+  TenantCredit,
+  TenantsResponse,
 } from "./engine.types";
 
 async function proxy(path: string, init?: RequestInit) {
@@ -93,4 +96,13 @@ export async function getLogs(jobId?: number, limit = 100): Promise<LogEntry[]> 
   if (jobId !== undefined) params.set("jobId", String(jobId));
   const res: LogsResponse = await proxy(`logs?${params.toString()}`);
   return res.logs;
+}
+
+export async function setEnginePaused(paused: boolean): Promise<PauseResult> {
+  return proxy(`engine/${paused ? "pause" : "resume"}`, { method: "POST" });
+}
+
+export async function getTenantCredits(): Promise<TenantCredit[]> {
+  const res: TenantsResponse = await proxy("tenants");
+  return res.tenants;
 }
