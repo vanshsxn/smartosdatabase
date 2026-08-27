@@ -65,6 +65,7 @@ const healthQueryOptions = {
   queryFn: getHealth,
   refetchInterval: REFETCH_INTERVAL,
   retry: false,
+  enabled: typeof window !== "undefined",
 };
 
 const jobsQueryOptions = {
