@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { Cpu, HardDrive, Layers, Users } from "lucide-react";
+import { useMemo } from "react";
 import {
   Area,
   AreaChart,
@@ -21,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { memoryQuery, resourcesQuery } from "@/lib/engine-queries";
+import { memoryQuery, metricsQuery, resourcesQuery } from "@/lib/engine-queries";
 import { useUsageHistory } from "@/lib/useUsageHistory";
 
 export const Route = createFileRoute("/resources")({
@@ -47,23 +49,52 @@ export const Route = createFileRoute("/resources")({
 function ResourcesPage() {
   const resources = useQuery(resourcesQuery);
   const memory = useQuery(memoryQuery);
-  const history = useUsageHistory();
+  const metrics = useQuery(metricsQuery);
   const r = resources.data;
   const m = memory.data;
+
+  const sample = useMemo(
+    () =>
+      r
+        ? {
+            cpu: r.cpuUtilization,
+            memory: r.memoryUtilization,
+            throughput: metrics.data?.throughputPerMin ?? 0,
+            running: metrics.data?.running ?? 0,
+            queued: metrics.data?.queued ?? 0,
+          }
+        : null,
+    [r, metrics.data],
+  );
+  const history = useUsageHistory(sample);
 
   return (
     <AppLayout title="Resources">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Cores in use" value={`${r?.usedCores ?? 0} / ${r?.totalCores ?? 0}`} />
+        <StatCard
+          label="Cores in use"
+          value={`${r?.usedCores ?? 0} / ${r?.totalCores ?? 0}`}
+          icon={<Cpu className="h-5 w-5" />}
+        />
         <StatCard
           label="Memory in use"
-          value={`${r?.usedMemoryMb ?? 0} / ${r?.totalMemoryMb ?? 0} MB`}
+          value={`${r?.usedMemoryMb ?? 0} MB`}
+          sub={`of ${r?.totalMemoryMb ?? 0} MB`}
+          tone="info"
+          icon={<HardDrive className="h-5 w-5" />}
         />
-        <StatCard label="Active allocations" value={String(r?.activeAllocations ?? 0)} />
+        <StatCard
+          label="Active allocations"
+          value={String(r?.activeAllocations ?? 0)}
+          tone="warning"
+          icon={<Layers className="h-5 w-5" />}
+        />
         <StatCard
           label="Thread pool"
           value={`${r?.threadPoolActive ?? 0} / ${r?.threadPoolWorkers ?? 0}`}
-          hint={`${r?.threadPoolQueued ?? 0} queued · ${r?.threadPoolCompleted ?? 0} done`}
+          sub={`${r?.threadPoolQueued ?? 0} queued · ${r?.threadPoolCompleted ?? 0} done`}
+          tone="success"
+          icon={<Users className="h-5 w-5" />}
         />
       </div>
 
@@ -72,10 +103,24 @@ function ResourcesPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Utilisation</CardTitle>
           </CardHeader>
-          <CardContent className="flex justify-around py-4">
-            <Gauge label="CPU" value={r?.cpuUtilization ?? 0} />
-            <Gauge label="Memory" value={r?.memoryUtilization ?? 0} />
-            <Gauge label="Fragmentation" value={(m?.fragmentation ?? 0) * 100} />
+          <CardContent className="flex flex-wrap justify-around gap-4 py-4">
+            <Gauge
+              label="CPU"
+              value={r?.cpuUtilization ?? 0}
+              detail={`${r?.freeCores ?? 0} cores free`}
+            />
+            <Gauge
+              label="Memory"
+              value={r?.memoryUtilization ?? 0}
+              detail={`${r?.freeMemoryMb ?? 0} MB free`}
+              color="var(--color-chart-2)"
+            />
+            <Gauge
+              label="Fragmentation"
+              value={(m?.fragmentation ?? 0) * 100}
+              detail={`largest ${m?.largestFreeMb ?? 0} MB`}
+              color="var(--color-chart-3)"
+            />
           </CardContent>
         </Card>
 
@@ -86,13 +131,13 @@ function ResourcesPage() {
           <CardContent className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={history}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.4} />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="currentColor" />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="currentColor" />
                 <Tooltip
                   contentStyle={{
-                    background: "var(--card)",
-                    border: "1px solid var(--border)",
+                    background: "var(--color-card)",
+                    border: "1px solid var(--color-border)",
                     borderRadius: 8,
                   }}
                 />
@@ -100,16 +145,16 @@ function ResourcesPage() {
                   type="monotone"
                   dataKey="cpu"
                   name="CPU %"
-                  stroke="var(--color-primary)"
-                  fill="var(--color-primary)"
+                  stroke="var(--color-chart-1)"
+                  fill="var(--color-chart-1)"
                   fillOpacity={0.18}
                 />
                 <Area
                   type="monotone"
                   dataKey="memory"
                   name="Memory %"
-                  stroke="var(--color-info)"
-                  fill="var(--color-info)"
+                  stroke="var(--color-chart-2)"
+                  fill="var(--color-chart-2)"
                   fillOpacity={0.18}
                 />
               </AreaChart>
@@ -153,9 +198,7 @@ function ResourcesPage() {
                     <TableCell className={b.free ? "text-muted-foreground" : "text-success"}>
                       {b.free ? "Free" : "Allocated"}
                     </TableCell>
-                    <TableCell>
-                      {b.free ? "—" : `#${b.ownerJobId} ${b.ownerName}`}
-                    </TableCell>
+                    <TableCell>{b.free ? "—" : `#${b.ownerJobId} ${b.ownerName}`}</TableCell>
                   </TableRow>
                 ))}
                 {!m?.blocks.length && (
