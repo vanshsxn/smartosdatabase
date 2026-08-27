@@ -17,6 +17,7 @@ import { Route as LogsRouteImport } from './routes/logs'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as SchedulerRouteImport } from './routes/scheduler'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SubmitRouteImport } from './routes/submit'
 import { Route as TenantsRouteImport } from './routes/tenants'
 import { Route as ApiEngineSplatRouteImport } from './routes/api/engine/$'
@@ -61,6 +62,11 @@ const SchedulerRoute = SchedulerRouteImport.update({
   path: '/scheduler',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SubmitRoute = SubmitRouteImport.update({
   id: '/submit',
   path: '/submit',
@@ -86,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/resources': typeof ResourcesRoute
   '/scheduler': typeof SchedulerRoute
+  '/settings': typeof SettingsRoute
   '/submit': typeof SubmitRoute
   '/tenants': typeof TenantsRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/resources': typeof ResourcesRoute
   '/scheduler': typeof SchedulerRoute
+  '/settings': typeof SettingsRoute
   '/submit': typeof SubmitRoute
   '/tenants': typeof TenantsRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/resources': typeof ResourcesRoute
   '/scheduler': typeof SchedulerRoute
+  '/settings': typeof SettingsRoute
   '/submit': typeof SubmitRoute
   '/tenants': typeof TenantsRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
@@ -128,6 +137,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/resources'
     | '/scheduler'
+    | '/settings'
     | '/submit'
     | '/tenants'
     | '/api/engine/$'
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/resources'
     | '/scheduler'
+    | '/settings'
     | '/submit'
     | '/tenants'
     | '/api/engine/$'
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/resources'
     | '/scheduler'
+    | '/settings'
     | '/submit'
     | '/tenants'
     | '/api/engine/$'
@@ -168,6 +180,7 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   ResourcesRoute: typeof ResourcesRoute
   SchedulerRoute: typeof SchedulerRoute
+  SettingsRoute: typeof SettingsRoute
   SubmitRoute: typeof SubmitRoute
   TenantsRoute: typeof TenantsRoute
   ApiEngineSplatRoute: typeof ApiEngineSplatRoute
@@ -231,6 +244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SchedulerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/submit': {
       id: '/submit'
       path: '/submit'
@@ -264,6 +284,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   ResourcesRoute: ResourcesRoute,
   SchedulerRoute: SchedulerRoute,
+  SettingsRoute: SettingsRoute,
   SubmitRoute: SubmitRoute,
   TenantsRoute: TenantsRoute,
   ApiEngineSplatRoute: ApiEngineSplatRoute,
