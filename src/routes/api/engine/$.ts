@@ -30,8 +30,9 @@ async function proxyToEngine(request: Request, splat: string) {
     ? request.url
     : `http://${request.headers.get("host") ?? "localhost"}${request.url}`;
   const url = new URL(absoluteUrl);
-  const suffix = splat ? `/${splat}${url.search}` : url.search;
-  const target = `${engineUrl.replace(/\/$/, "")}${suffix}`;
+  // The engine's API lives under /api, so map /api/engine/jobs -> /api/jobs.
+  const enginePath = splat ? `/api/${splat}` : "/api";
+  const target = `${engineUrl.replace(/\/$/, "")}${enginePath}${url.search}`;
 
   const headers = new Headers();
   const forward = ["content-type", "accept", "authorization"];
