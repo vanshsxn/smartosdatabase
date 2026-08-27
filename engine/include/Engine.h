@@ -4,6 +4,7 @@
 // dispatcher loop that turns scheduling decisions into executing jobs.
 
 #include <atomic>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -65,6 +66,10 @@ public:
     void setPolicy(const std::string& policy);
     std::string policy() const;
 
+    // Dispatcher pause/resume — lets operators freeze scheduling from the UI.
+    void setPaused(bool paused);
+    bool paused() const { return paused_.load(); }
+
     SchedulerMetrics metrics() const;
     ResourceSnapshot resources() const;
     MemoryStats memory() const { return memory_.stats(); }
@@ -78,6 +83,7 @@ public:
     // Tenant credit ledger mirrored from PostgreSQL by the API layer.
     void setTenantCredits(const std::string& tenantId, double credits);
     double tenantCredits(const std::string& tenantId) const;
+    std::map<std::string, double> allTenantCredits() const;
 
 private:
     void dispatchLoop();
@@ -98,6 +104,7 @@ private:
     std::vector<SchedulingDecision> decisions_;
     std::atomic<long long> nextId_{1000};
     std::atomic<bool> running_{false};
+    std::atomic<bool> paused_{false};
     std::atomic<long long> contextSwitches_{0};
     std::atomic<long long> preemptions_{0};
     std::atomic<long long> busyCpuMs_{0};

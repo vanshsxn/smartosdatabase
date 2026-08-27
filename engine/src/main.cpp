@@ -92,6 +92,7 @@ int main() {
         w.beginObject().kv("status", "ok").kv("engine", "mv-cloudcore").kv("policy",
                                                                            engine.policy());
         w.kv("workers", static_cast<long long>(engine.pool().workerCount()));
+        w.kv("paused", engine.paused());
         w.endObject();
         return jsonRes(w.str());
     });
@@ -143,6 +144,26 @@ int main() {
         json::Writer w;
         w.beginObject().kv("cancelled", ok).kv("message", message).endObject();
         return jsonRes(w.str(), ok ? 200 : 409);
+    });
+
+    server.route("POST", "/api/engine/pause", [&](const HttpRequest&) {
+        engine.setPaused(true);
+        return jsonRes(R"({"paused":true})");
+    });
+
+    server.route("POST", "/api/engine/resume", [&](const HttpRequest&) {
+        engine.setPaused(false);
+        return jsonRes(R"({"paused":false})");
+    });
+
+    server.route("GET", "/api/tenants", [&](const HttpRequest&) {
+        json::Writer w;
+        w.beginObject().beginArray("tenants");
+        for (const auto& [id, credits] : engine.allTenantCredits()) {
+            w.beginObject().kv("tenantId", id).kv("credits", credits).endObject();
+        }
+        w.endArray().endObject();
+        return jsonRes(w.str());
     });
 
     server.route("GET", "/api/metrics", [&](const HttpRequest&) {
