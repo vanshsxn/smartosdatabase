@@ -25,7 +25,11 @@ export const Route = createFileRoute("/api/engine/$")({
 async function proxyToEngine(request: Request, splat: string) {
   const engineUrl = process.env["ENGINE_URL"] ?? "http://127.0.0.1:9090";
 
-  const url = new URL(request.url);
+  // In some server environments request.url may be a relative path.
+  const absoluteUrl = URL.canParse(request.url)
+    ? request.url
+    : `http://${request.headers.get("host") ?? "localhost"}${request.url}`;
+  const url = new URL(absoluteUrl);
   const suffix = splat ? `/${splat}${url.search}` : url.search;
   const target = `${engineUrl.replace(/\/$/, "")}${suffix}`;
 
