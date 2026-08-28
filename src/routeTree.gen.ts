@@ -21,6 +21,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SubmitRouteImport } from './routes/submit'
 import { Route as TenantsRouteImport } from './routes/tenants'
 import { Route as ApiEngineSplatRouteImport } from './routes/api/engine/$'
+import { Route as ApiEngineStreamRouteImport } from './routes/api/engine/stream'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -82,6 +83,11 @@ const ApiEngineSplatRoute = ApiEngineSplatRouteImport.update({
   path: '/api/engine/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiEngineStreamRoute = ApiEngineStreamRouteImport.update({
+  id: '/api/engine/stream',
+  path: '/api/engine/stream',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -96,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/submit': typeof SubmitRoute
   '/tenants': typeof TenantsRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
+  '/api/engine/stream': typeof ApiEngineStreamRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/submit': typeof SubmitRoute
   '/tenants': typeof TenantsRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
+  '/api/engine/stream': typeof ApiEngineStreamRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,6 +133,7 @@ export interface FileRoutesById {
   '/submit': typeof SubmitRoute
   '/tenants': typeof TenantsRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
+  '/api/engine/stream': typeof ApiEngineStreamRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
     | '/submit'
     | '/tenants'
     | '/api/engine/$'
+    | '/api/engine/stream'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
     | '/submit'
     | '/tenants'
     | '/api/engine/$'
+    | '/api/engine/stream'
   id:
     | '__root__'
     | '/'
@@ -169,6 +180,7 @@ export interface FileRouteTypes {
     | '/submit'
     | '/tenants'
     | '/api/engine/$'
+    | '/api/engine/stream'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,6 +196,7 @@ export interface RootRouteChildren {
   SubmitRoute: typeof SubmitRoute
   TenantsRoute: typeof TenantsRoute
   ApiEngineSplatRoute: typeof ApiEngineSplatRoute
+  ApiEngineStreamRoute: typeof ApiEngineStreamRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -272,6 +285,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiEngineSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/engine/stream': {
+      id: '/api/engine/stream'
+      path: '/api/engine/stream'
+      fullPath: '/api/engine/stream'
+      preLoaderRoute: typeof ApiEngineStreamRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -288,6 +308,7 @@ const rootRouteChildren: RootRouteChildren = {
   SubmitRoute: SubmitRoute,
   TenantsRoute: TenantsRoute,
   ApiEngineSplatRoute: ApiEngineSplatRoute,
+  ApiEngineStreamRoute: ApiEngineStreamRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
