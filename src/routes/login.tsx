@@ -1,19 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Cloud } from "lucide-react";
+import { Cloud, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { TENANTS, useSession } from "@/lib/session";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { lovable } from "@/integrations/lovable/index";
+import { supabase } from "@/integrations/supabase/client";
+import { useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -36,15 +33,63 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const { user, signIn, setTenantId, tenantId } = useSession();
+  const { user } = useSession();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@smartcloud.dev");
-  const [password, setPassword] = useState("demo");
-  const [tenant, setTenant] = useState(tenantId || "tenant-a");
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (user) navigate({ to: "/", replace: true });
   }, [user, navigate]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: { display_name: name.trim() || email.split("@")[0] },
+          },
+        });
+        if (error) throw error;
+        toast.success("Account created — you're signed in.");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (error) throw error;
+        toast.success("Welcome back.");
+      }
+      navigate({ to: "/", replace: true });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Authentication failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleGoogle() {
+    setBusy(true);
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin,
+    });
+    if (result.error) {
+      setBusy(false);
+      toast.error("Google sign-in failed");
+      return;
+    }
+    if (result.redirected) return;
+    navigate({ to: "/", replace: true });
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -56,22 +101,32 @@ function LoginPage() {
             Sign in to submit jobs and monitor the scheduler.
           </p>
         </CardHeader>
-        <CardContent>
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!email.trim()) return;
-              setTenantId(tenant);
-              signIn(email.trim());
-              navigate({ to: "/" });
-            }}
-          >
+        <CardContent className="space-y-4">
+          <Tabs value={mode} onValueChange={(v) => setMode(v as "signin" | "signup")}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="signin">Sign in</TabsTrigger>
+              <TabsTrigger value="signup">Create account</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            {mode === "signup" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="name">Display name</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ops Engineer"
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -82,33 +137,28 @@ function LoginPage() {
               <Input
                 id="password"
                 type="password"
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tenant">Tenant</Label>
-              <Select value={tenant} onValueChange={setTenant}>
-                <SelectTrigger id="tenant">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TENANTS.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name} · {t.plan}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button type="submit" className="w-full">
-              Sign in
+            <Button type="submit" className="w-full" disabled={busy}>
+              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {mode === "signup" ? "Create account" : "Sign in"}
             </Button>
-            <p className="text-center text-xs text-muted-foreground">
-              Local console session — credentials are not sent anywhere.
-            </p>
           </form>
+
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            or
+            <span className="h-px flex-1 bg-border" />
+          </div>
+
+          <Button variant="outline" className="w-full" onClick={handleGoogle} disabled={busy}>
+            Continue with Google
+          </Button>
         </CardContent>
       </Card>
     </div>
