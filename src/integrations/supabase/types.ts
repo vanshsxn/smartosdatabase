@@ -14,7 +14,96 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      alert_events: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          message: string
+          severity: string
+          tenant_id: string | null
+          threshold: number | null
+          user_id: string
+          value: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          message: string
+          severity?: string
+          tenant_id?: string | null
+          threshold?: number | null
+          user_id: string
+          value?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          message?: string
+          severity?: string
+          tenant_id?: string | null
+          threshold?: number | null
+          user_id?: string
+          value?: number | null
+        }
+        Relationships: []
+      }
+      alert_rules: {
+        Row: {
+          cpu_threshold: number
+          credit_threshold: number
+          enabled: boolean
+          memory_threshold: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cpu_threshold?: number
+          credit_threshold?: number
+          enabled?: boolean
+          memory_threshold?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cpu_threshold?: number
+          credit_threshold?: number
+          enabled?: boolean
+          memory_threshold?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
