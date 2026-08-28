@@ -58,7 +58,7 @@ export function AppLayout({ title, children }: { title: string; children: ReactN
     return <div className="min-h-screen bg-background" />;
   }
 
-  const online = health.isSuccess;
+  const online = health.isSuccess && (health.data?.reachable ?? health.data?.status === "ok");
   const paused = health.data?.paused;
 
   return (

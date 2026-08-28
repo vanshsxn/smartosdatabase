@@ -66,6 +66,97 @@ async function proxyToEngine(request: Request, splat: string) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "engine unreachable";
-    return Response.json({ error: message }, { status: 503 });
+    if (request.method === "GET") {
+      const fallback = getOfflineSnapshot(splat);
+      if (fallback !== undefined) {
+        return Response.json(fallback, {
+          status: 200,
+          headers: {
+            "cache-control": "no-store",
+            "x-engine-status": "offline",
+          },
+        });
+      }
+    }
+
+    return Response.json(
+      {
+        error: "The scheduling engine is currently offline",
+        detail: message,
+      },
+      { status: 503 },
+    );
+  }
+}
+
+function getOfflineSnapshot(splat: string): unknown | undefined {
+  switch (splat) {
+    case "health":
+      return {
+        status: "offline",
+        engine: "MV CloudCore",
+        policy: "—",
+        workers: 0,
+        paused: false,
+        reachable: false,
+      };
+    case "jobs":
+      return { jobs: [] };
+    case "metrics":
+      return {
+        policy: "—",
+        avgWaitingMs: 0,
+        avgTurnaroundMs: 0,
+        avgResponseMs: 0,
+        cpuUtilization: 0,
+        throughputPerMin: 0,
+        contextSwitches: 0,
+        preemptions: 0,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+        running: 0,
+        queued: 0,
+      };
+    case "resources":
+      return {
+        totalCores: 0,
+        usedCores: 0,
+        freeCores: 0,
+        cpuUtilization: 0,
+        totalMemoryMb: 0,
+        usedMemoryMb: 0,
+        freeMemoryMb: 0,
+        memoryUtilization: 0,
+        activeAllocations: 0,
+        fragmentation: 0,
+        largestFreeMb: 0,
+        threadPoolWorkers: 0,
+        threadPoolActive: 0,
+        threadPoolQueued: 0,
+        threadPoolCompleted: 0,
+      };
+    case "memory":
+      return {
+        totalMb: 0,
+        usedMb: 0,
+        freeMb: 0,
+        utilization: 0,
+        fragmentation: 0,
+        largestFreeMb: 0,
+        freeBlocks: 0,
+        usedBlocks: 0,
+        allocationCount: 0,
+        failedAllocations: 0,
+        blocks: [],
+      };
+    case "scheduler/queues":
+      return { policy: "—", levels: [], decisions: [] };
+    case "tenants":
+      return { tenants: [] };
+    case "logs":
+      return { logs: [] };
+    default:
+      return undefined;
   }
 }

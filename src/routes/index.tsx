@@ -146,7 +146,7 @@ function DashboardPage() {
 
   return (
     <AppLayout title="Dashboard">
-      {health.isError ? <EngineOffline /> : null}
+      {health.isError || health.data?.reachable === false ? <EngineOffline /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
