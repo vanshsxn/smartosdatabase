@@ -117,6 +117,7 @@ export interface Health {
   policy: string;
   workers: number;
   paused?: boolean;
+  reachable?: boolean;
 }
 
 export interface TenantCredit {
