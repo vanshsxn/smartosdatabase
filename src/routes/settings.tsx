@@ -42,6 +42,7 @@ function SettingsPage() {
   const { user, tenantId, setTenantId, signOut } = useSession();
   const health = useQuery(healthQuery);
   const resources = useQuery(resourcesQuery);
+  const { rules, saveRules, saving } = useAlerts();
 
   return (
     <AppLayout title="Settings">
