@@ -136,15 +136,10 @@ function LoginPage() {
             </Button>
           </form>
 
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="h-px flex-1 bg-border" />
-            or
-            <span className="h-px flex-1 bg-border" />
-          </div>
+          <p className="text-center text-xs text-muted-foreground">
+            Accounts are stored securely in the app backend.
+          </p>
 
-          <Button variant="outline" className="w-full" onClick={handleGoogle} disabled={busy}>
-            Continue with Google
-          </Button>
         </CardContent>
       </Card>
     </div>
