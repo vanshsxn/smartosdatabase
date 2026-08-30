@@ -106,9 +106,15 @@ function DashboardPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const m = metrics.data;
-  const r = resources.data;
-  const jobList = jobs.data ?? [];
+  const m = snapshot?.metrics ?? metrics.data;
+  const r = snapshot?.resources ?? resources.data;
+  const streamJobs = snapshot?.jobs;
+  const jobList =
+    streamJobs && streamJobs.length
+      ? tenantId
+        ? streamJobs.filter((j) => j.tenantId === tenantId)
+        : streamJobs
+      : (jobs.data ?? []);
   const total = jobList.length;
 
   const statusData = m
