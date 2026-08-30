@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAlerts } from "@/lib/alerts";
 import { jobsQuery, logsQuery } from "@/lib/engine-queries";
 import { useSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
