@@ -59,7 +59,7 @@ import {
   tenantCreditsQuery,
 } from "@/lib/engine-queries";
 import { TENANTS, tenantName, useSession } from "@/lib/session";
-import { useUsageHistory } from "@/lib/useUsageHistory";
+import { useEngineStream } from "@/lib/engine-stream";
 
 export const Route = createFileRoute("/")({
   head: () => ({
