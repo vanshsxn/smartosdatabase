@@ -94,17 +94,8 @@ function DashboardPage() {
   const jobs = useQuery(jobsQuery(tenantId));
   const credits = useQuery(tenantCreditsQuery);
 
-  const sample = useMemo(() => {
-    if (!metrics.data || !resources.data) return null;
-    return {
-      cpu: Number(resources.data.cpuUtilization.toFixed(1)),
-      memory: Number(resources.data.memoryUtilization.toFixed(1)),
-      throughput: Number(metrics.data.throughputPerMin.toFixed(2)),
-      running: metrics.data.running,
-      queued: metrics.data.queued,
-    };
-  }, [metrics.data, resources.data]);
-  const history = useUsageHistory(sample);
+  // Continuous updates come from the SSE stream (1 Hz), not from polling.
+  const { history, snapshot } = useEngineStream();
 
   const pause = useMutation({
     mutationFn: (paused: boolean) => setEnginePaused(paused),
