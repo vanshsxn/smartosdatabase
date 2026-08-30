@@ -9,6 +9,9 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
+import { Toaster } from "../components/ui/sonner";
+import { AlertsProvider } from "../lib/alerts";
+import { EngineStreamProvider } from "../lib/engine-stream";
 import { SessionProvider } from "../lib/session";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -120,8 +123,13 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
+        <EngineStreamProvider>
+          <AlertsProvider>
+            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <Outlet />
+            <Toaster />
+          </AlertsProvider>
+        </EngineStreamProvider>
       </SessionProvider>
     </QueryClientProvider>
   );

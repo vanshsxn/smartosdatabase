@@ -59,7 +59,7 @@ import {
   tenantCreditsQuery,
 } from "@/lib/engine-queries";
 import { TENANTS, tenantName, useSession } from "@/lib/session";
-import { useUsageHistory } from "@/lib/useUsageHistory";
+import { useEngineStream } from "@/lib/engine-stream";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -94,17 +94,8 @@ function DashboardPage() {
   const jobs = useQuery(jobsQuery(tenantId));
   const credits = useQuery(tenantCreditsQuery);
 
-  const sample = useMemo(() => {
-    if (!metrics.data || !resources.data) return null;
-    return {
-      cpu: Number(resources.data.cpuUtilization.toFixed(1)),
-      memory: Number(resources.data.memoryUtilization.toFixed(1)),
-      throughput: Number(metrics.data.throughputPerMin.toFixed(2)),
-      running: metrics.data.running,
-      queued: metrics.data.queued,
-    };
-  }, [metrics.data, resources.data]);
-  const history = useUsageHistory(sample);
+  // Continuous updates come from the SSE stream (1 Hz), not from polling.
+  const { history, snapshot } = useEngineStream();
 
   const pause = useMutation({
     mutationFn: (paused: boolean) => setEnginePaused(paused),
@@ -115,9 +106,15 @@ function DashboardPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const m = metrics.data;
-  const r = resources.data;
-  const jobList = jobs.data ?? [];
+  const m = snapshot?.metrics ?? metrics.data;
+  const r = snapshot?.resources ?? resources.data;
+  const streamJobs = snapshot?.jobs;
+  const jobList =
+    streamJobs && streamJobs.length
+      ? tenantId
+        ? streamJobs.filter((j) => j.tenantId === tenantId)
+        : streamJobs
+      : (jobs.data ?? []);
   const total = jobList.length;
 
   const statusData = m

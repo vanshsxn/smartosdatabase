@@ -12,6 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { useAlerts } from "@/lib/alerts";
 import { healthQuery, resourcesQuery } from "@/lib/engine-queries";
 import { TENANTS, useSession } from "@/lib/session";
 
@@ -39,6 +42,7 @@ function SettingsPage() {
   const { user, tenantId, setTenantId, signOut } = useSession();
   const health = useQuery(healthQuery);
   const resources = useQuery(resourcesQuery);
+  const { rules, saveRules, saving } = useAlerts();
 
   return (
     <AppLayout title="Settings">
@@ -88,8 +92,80 @@ function SettingsPage() {
             </p>
           </CardContent>
         </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Alert thresholds</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+              <div>
+                <Label>Alerting enabled</Label>
+                <p className="text-xs text-muted-foreground">
+                  Fire notifications and record alert events when a threshold is breached.
+                </p>
+              </div>
+              <Switch
+                checked={rules.enabled}
+                onCheckedChange={(v) => void saveRules({ enabled: v })}
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <ThresholdField
+                id="cpu"
+                label="CPU usage (%)"
+                value={rules.cpu_threshold}
+                onCommit={(n) => void saveRules({ cpu_threshold: n })}
+              />
+              <ThresholdField
+                id="memory"
+                label="Memory usage (%)"
+                value={rules.memory_threshold}
+                onCommit={(n) => void saveRules({ memory_threshold: n })}
+              />
+              <ThresholdField
+                id="credits"
+                label="Credit depletion (credits left)"
+                value={rules.credit_threshold}
+                onCommit={(n) => void saveRules({ credit_threshold: n })}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {saving ? "Saving…" : "Changes save automatically. Alerts appear in Execution Logs."}
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
+  );
+}
+
+function ThresholdField({
+  id,
+  label,
+  value,
+  onCommit,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  onCommit: (n: number) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        type="number"
+        min={0}
+        defaultValue={value}
+        key={`${id}-${value}`}
+        onBlur={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n) && n !== value) onCommit(n);
+        }}
+      />
+    </div>
   );
 }
 

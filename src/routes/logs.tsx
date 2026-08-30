@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAlerts } from "@/lib/alerts";
 import { jobsQuery, logsQuery } from "@/lib/engine-queries";
 import { useSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,7 @@ function LogsPage() {
   const { tenantId } = useSession();
   const jobs = useQuery(jobsQuery(tenantId));
   const logs = useQuery(logsQuery(jobId, 400));
+  const { events, refreshEvents } = useAlerts();
   const [level, setLevel] = useState("ALL");
   const [source, setSource] = useState("ALL");
   const [term, setTerm] = useState("");
@@ -147,6 +149,44 @@ function LogsPage() {
               ))
             ) : (
               <p className="py-8 text-center text-muted-foreground">No log entries</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-base">Alert events · {events.length}</CardTitle>
+          <Button variant="outline" onClick={() => void refreshEvents()}>
+            Refresh
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div className="max-h-[40vh] overflow-auto rounded-md border border-border bg-card/40">
+            {events.length ? (
+              <ul className="divide-y divide-border text-sm">
+                {events.map((e) => (
+                  <li key={e.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                      {new Date(e.created_at).toLocaleString()}
+                    </span>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded px-1.5 py-0.5 font-mono text-[11px]",
+                        e.severity === "ERROR"
+                          ? "bg-destructive/15 text-destructive"
+                          : "bg-warning/15 text-warning",
+                      )}
+                    >
+                      {e.severity}
+                    </span>
+                    <span className="shrink-0 font-mono text-xs text-primary">{e.kind}</span>
+                    <span className="min-w-0 break-words">{e.message}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="py-8 text-center text-sm text-muted-foreground">No alert events yet</p>
             )}
           </div>
         </CardContent>
