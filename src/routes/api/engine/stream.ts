@@ -7,7 +7,18 @@ export const Route = createFileRoute("/api/engine/stream")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const engineUrl = (process.env["ENGINE_URL"] ?? "http://127.0.0.1:9090").replace(/\/$/, "");
+        const rawEngineUrl = (process.env["ENGINE_URL"] ?? "").trim();
+        const isDev = process.env["NODE_ENV"] !== "production";
+        if (!rawEngineUrl && !isDev) {
+          return Response.json(
+            {
+              error:
+                "ENGINE_URL is not configured. Set ENGINE_URL to the public HTTPS URL of the C++ engine in the Cloudflare Workers environment variables for this deployment.",
+            },
+            { status: 503 },
+          );
+        }
+        const engineUrl = (rawEngineUrl || "http://127.0.0.1:9090").replace(/\/$/, "");
         const encoder = new TextEncoder();
         const intervalMs = 1000;
 

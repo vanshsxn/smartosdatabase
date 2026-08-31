@@ -1,60 +1,103 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+/**
+ * Server-side proxy: browser -> /api/engine/* -> C++ engine (ENGINE_URL).
+ * ENGINE_URL is read inside the handler (Cloudflare injects env at request
+ * time) and is never exposed to client-side JavaScript.
+ */
 export const Route = createFileRoute("/api/engine/$")({
   server: {
     handlers: {
-      GET: async ({ request, params }) => {
-        return proxyToEngine(request, params._splat ?? "");
-      },
-      POST: async ({ request, params }) => {
-        return proxyToEngine(request, params._splat ?? "");
-      },
-      PUT: async ({ request, params }) => {
-        return proxyToEngine(request, params._splat ?? "");
-      },
-      PATCH: async ({ request, params }) => {
-        return proxyToEngine(request, params._splat ?? "");
-      },
-      DELETE: async ({ request, params }) => {
-        return proxyToEngine(request, params._splat ?? "");
-      },
+      OPTIONS: async () =>
+        new Response(null, {
+          status: 204,
+          headers: {
+            "access-control-allow-origin": "*",
+            "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+            "access-control-allow-headers": "Content-Type, Authorization, Accept",
+            "access-control-max-age": "86400",
+          },
+        }),
+      GET: ({ request, params }) => proxyToEngine(request, params._splat ?? ""),
+      POST: ({ request, params }) => proxyToEngine(request, params._splat ?? ""),
+      PUT: ({ request, params }) => proxyToEngine(request, params._splat ?? ""),
+      PATCH: ({ request, params }) => proxyToEngine(request, params._splat ?? ""),
+      DELETE: ({ request, params }) => proxyToEngine(request, params._splat ?? ""),
     },
   },
 });
 
-async function proxyToEngine(request: Request, splat: string) {
-  const engineUrl = process.env["ENGINE_URL"] ?? "http://127.0.0.1:9090";
+const REQUEST_TIMEOUT_MS = 15_000;
 
-  // In some server environments request.url may be a relative path.
-  const absoluteUrl = URL.canParse(request.url)
-    ? request.url
-    : `http://${request.headers.get("host") ?? "localhost"}${request.url}`;
-  const url = new URL(absoluteUrl);
-  // Map /api/engine/health -> /health and everything else under /api.
-  const enginePath = splat === "health" ? "/health" : splat ? `/api/${splat}` : "/api";
-  const target = `${engineUrl.replace(/\/$/, "")}${enginePath}${url.search}`;
+/** Resolve the engine base URL. Localhost is only allowed in dev. */
+function resolveEngineUrl(): { url?: string; error?: string } {
+  const raw = (process.env["ENGINE_URL"] ?? "").trim();
+  const isDev = process.env["NODE_ENV"] !== "production";
+
+  if (!raw) {
+    if (isDev) return { url: "http://127.0.0.1:9090" };
+    return {
+      error:
+        "ENGINE_URL is not configured. Set ENGINE_URL to the public HTTPS URL of the C++ engine in the Cloudflare Workers environment variables for this deployment.",
+    };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return { error: `ENGINE_URL is not a valid absolute URL: ${raw}` };
+  }
+
+  const host = parsed.hostname;
+  const isLocal =
+    host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1";
+  if (isLocal && !isDev) {
+    return {
+      error:
+        "ENGINE_URL points at localhost, which is unreachable from Cloudflare Workers. Set it to the public HTTPS URL of the separately deployed C++ engine.",
+    };
+  }
+
+  return { url: raw.replace(/\/$/, "") };
+}
+
+async function proxyToEngine(request: Request, splat: string) {
+  const { url: engineUrl, error } = resolveEngineUrl();
+  if (!engineUrl) {
+    return Response.json({ error }, { status: 503, headers: { "cache-control": "no-store" } });
+  }
+
+  // Only the query string is needed; avoid parsing a possibly relative URL.
+  const search = request.url.includes("?") ? request.url.slice(request.url.indexOf("?")) : "";
+
+  // /api/engine/health -> /health ; everything else -> /api/<splat>
+  const path = splat.replace(/^\/+/, "");
+  const enginePath = path === "health" ? "/health" : path ? `/api/${path}` : "/api";
+  const target = `${engineUrl}${enginePath}${search}`;
 
   const headers = new Headers();
-  const forward = ["content-type", "accept", "authorization"];
-  for (const name of forward) {
+  for (const name of ["content-type", "accept", "authorization"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
 
-  const body = ["GET", "HEAD"].includes(request.method) ? undefined : request.body;
+  const hasBody = !["GET", "HEAD", "OPTIONS"].includes(request.method);
+  const body = hasBody ? await request.arrayBuffer() : undefined;
+
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
 
   try {
     const engineRes = await fetch(target, {
       method: request.method,
       headers,
-      body,
-      // @ts-expect-error duplex is required for streaming bodies in Node fetch
-      duplex: body ? "half" : undefined,
+      body: body && body.byteLength > 0 ? body : null,
+      redirect: "manual", // never follow redirects -> no proxy loops
+      signal: timeout,
     });
 
-    const responseHeaders = new Headers();
-    const copy = ["content-type", "cache-control"];
-    for (const name of copy) {
+    const responseHeaders = new Headers({ "cache-control": "no-store" });
+    for (const name of ["content-type", "location"]) {
       const value = engineRes.headers.get(name);
       if (value) responseHeaders.set(name, value);
     }
@@ -66,97 +109,16 @@ async function proxyToEngine(request: Request, splat: string) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "engine unreachable";
-    if (request.method === "GET") {
-      const fallback = getOfflineSnapshot(splat);
-      if (fallback !== undefined) {
-        return Response.json(fallback, {
-          status: 200,
-          headers: {
-            "cache-control": "no-store",
-            "x-engine-status": "offline",
-          },
-        });
-      }
-    }
-
+    const timedOut = err instanceof Error && err.name === "TimeoutError";
     return Response.json(
       {
-        error: "The scheduling engine is currently offline",
+        error: timedOut
+          ? "Timed out waiting for the task engine"
+          : "The task engine is unreachable",
         detail: message,
+        target: enginePath,
       },
-      { status: 503 },
+      { status: timedOut ? 504 : 502, headers: { "cache-control": "no-store" } },
     );
-  }
-}
-
-function getOfflineSnapshot(splat: string): unknown | undefined {
-  switch (splat) {
-    case "health":
-      return {
-        status: "offline",
-        engine: "MV CloudCore",
-        policy: "—",
-        workers: 0,
-        paused: false,
-        reachable: false,
-      };
-    case "jobs":
-      return { jobs: [] };
-    case "metrics":
-      return {
-        policy: "—",
-        avgWaitingMs: 0,
-        avgTurnaroundMs: 0,
-        avgResponseMs: 0,
-        cpuUtilization: 0,
-        throughputPerMin: 0,
-        contextSwitches: 0,
-        preemptions: 0,
-        completed: 0,
-        failed: 0,
-        cancelled: 0,
-        running: 0,
-        queued: 0,
-      };
-    case "resources":
-      return {
-        totalCores: 0,
-        usedCores: 0,
-        freeCores: 0,
-        cpuUtilization: 0,
-        totalMemoryMb: 0,
-        usedMemoryMb: 0,
-        freeMemoryMb: 0,
-        memoryUtilization: 0,
-        activeAllocations: 0,
-        fragmentation: 0,
-        largestFreeMb: 0,
-        threadPoolWorkers: 0,
-        threadPoolActive: 0,
-        threadPoolQueued: 0,
-        threadPoolCompleted: 0,
-      };
-    case "memory":
-      return {
-        totalMb: 0,
-        usedMb: 0,
-        freeMb: 0,
-        utilization: 0,
-        fragmentation: 0,
-        largestFreeMb: 0,
-        freeBlocks: 0,
-        usedBlocks: 0,
-        allocationCount: 0,
-        failedAllocations: 0,
-        blocks: [],
-      };
-    case "scheduler/queues":
-      return { policy: "—", levels: [], decisions: [] };
-    case "tenants":
-      return { tenants: [] };
-    case "logs":
-      return { logs: [] };
-    default:
-      return undefined;
   }
 }
