@@ -77,6 +77,54 @@ export type Database = {
         }
         Relationships: []
       }
+      job_progress: {
+        Row: {
+          cpu_usage: number | null
+          created_at: string
+          id: string
+          job_id: string
+          job_name: string | null
+          job_type: string | null
+          memory_mb: number | null
+          message: string | null
+          percent: number
+          state: string
+          tenant_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cpu_usage?: number | null
+          created_at?: string
+          id?: string
+          job_id: string
+          job_name?: string | null
+          job_type?: string | null
+          memory_mb?: number | null
+          message?: string | null
+          percent?: number
+          state?: string
+          tenant_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cpu_usage?: number | null
+          created_at?: string
+          id?: string
+          job_id?: string
+          job_name?: string | null
+          job_type?: string | null
+          memory_mb?: number | null
+          message?: string | null
+          percent?: number
+          state?: string
+          tenant_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -101,6 +149,39 @@ export type Database = {
           id?: string
           tenant_id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      walkthrough_progress: {
+        Row: {
+          completed: boolean
+          completed_at: string | null
+          created_at: string
+          id: string
+          note: string | null
+          step_key: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          step_key: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          step_key?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
