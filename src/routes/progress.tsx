@@ -82,7 +82,7 @@ function ProgressPage() {
   const capture = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not signed in");
-      return recordJobSnapshots(user.id, jobs.data?.jobs ?? []);
+      return recordJobSnapshots(user.id, jobs.data ?? []);
     },
     onSuccess: (count) => {
       toast.success(`Recorded ${count} job progress snapshot${count === 1 ? "" : "s"}.`);
@@ -164,7 +164,7 @@ function ProgressPage() {
               <Button
                 size="sm"
                 onClick={() => capture.mutate()}
-                disabled={capture.isPending || !(jobs.data?.jobs?.length ?? 0)}
+                disabled={capture.isPending || !(jobs.data?.length ?? 0)}
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Capture snapshot
