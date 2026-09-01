@@ -103,7 +103,7 @@ async function proxyToEngine(request: Request, splat: string) {
       engineRes = await fetch(target, {
         method: request.method,
         headers,
-        body: body && body.byteLength > 0 ? body : undefined,
+        body: body && body.byteLength > 0 ? body : null,
         redirect: "manual",
         signal: controller.signal,
       });

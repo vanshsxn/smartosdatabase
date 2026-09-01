@@ -14,6 +14,7 @@ import { Route as BillingRouteImport } from './routes/billing'
 import { Route as JobsRouteImport } from './routes/jobs'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LogsRouteImport } from './routes/logs'
+import { Route as ProgressRouteImport } from './routes/progress'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as SchedulerRouteImport } from './routes/scheduler'
@@ -46,6 +47,11 @@ const LoginRoute = LoginRouteImport.update({
 const LogsRoute = LogsRouteImport.update({
   id: '/logs',
   path: '/logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgressRoute = ProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsRoute = ReportsRouteImport.update({
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/jobs': typeof JobsRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
   '/resources': typeof ResourcesRoute
   '/scheduler': typeof SchedulerRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/jobs': typeof JobsRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
   '/resources': typeof ResourcesRoute
   '/scheduler': typeof SchedulerRoute
@@ -126,6 +134,7 @@ export interface FileRoutesById {
   '/jobs': typeof JobsRoute
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
+  '/progress': typeof ProgressRoute
   '/reports': typeof ReportsRoute
   '/resources': typeof ResourcesRoute
   '/scheduler': typeof SchedulerRoute
@@ -143,6 +152,7 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/login'
     | '/logs'
+    | '/progress'
     | '/reports'
     | '/resources'
     | '/scheduler'
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/login'
     | '/logs'
+    | '/progress'
     | '/reports'
     | '/resources'
     | '/scheduler'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/login'
     | '/logs'
+    | '/progress'
     | '/reports'
     | '/resources'
     | '/scheduler'
@@ -189,6 +201,7 @@ export interface RootRouteChildren {
   JobsRoute: typeof JobsRoute
   LoginRoute: typeof LoginRoute
   LogsRoute: typeof LogsRoute
+  ProgressRoute: typeof ProgressRoute
   ReportsRoute: typeof ReportsRoute
   ResourcesRoute: typeof ResourcesRoute
   SchedulerRoute: typeof SchedulerRoute
@@ -234,6 +247,13 @@ declare module '@tanstack/react-router' {
       path: '/logs'
       fullPath: '/logs'
       preLoaderRoute: typeof LogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/progress': {
+      id: '/progress'
+      path: '/progress'
+      fullPath: '/progress'
+      preLoaderRoute: typeof ProgressRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports': {
@@ -301,6 +321,7 @@ const rootRouteChildren: RootRouteChildren = {
   JobsRoute: JobsRoute,
   LoginRoute: LoginRoute,
   LogsRoute: LogsRoute,
+  ProgressRoute: ProgressRoute,
   ReportsRoute: ReportsRoute,
   ResourcesRoute: ResourcesRoute,
   SchedulerRoute: SchedulerRoute,
