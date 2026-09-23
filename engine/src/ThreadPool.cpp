@@ -2,11 +2,18 @@
 
 namespace mvcc {
 
+namespace {
+thread_local int t_workerIndex = -1;
+}
+
+int ThreadPool::currentWorkerIndex() { return t_workerIndex; }
+
 ThreadPool::ThreadPool(size_t workers) {
     if (workers == 0) workers = 1;
     workers_.reserve(workers);
     for (size_t i = 0; i < workers; ++i) {
-        workers_.emplace_back([this] { workerLoop(); });
+        int index = static_cast<int>(i);
+        workers_.emplace_back([this, index] { workerLoop(index); });
     }
 }
 
@@ -22,7 +29,8 @@ bool ThreadPool::submit(std::function<void()> task) {
     return true;
 }
 
-void ThreadPool::workerLoop() {
+void ThreadPool::workerLoop(int index) {
+    t_workerIndex = index;
     for (;;) {
         std::function<void()> task;
         {
