@@ -304,6 +304,16 @@ void Engine::execute(long long jobId, long long quantumMs) {
 
     resources_.release(jobId);
 
+    if (!tenantOfJob.empty() && sliceCost > 0.0) {
+        double left = chargeTenant(tenantOfJob, sliceCost);
+        std::ostringstream bill;
+        bill.setf(std::ios::fixed);
+        bill.precision(3);
+        bill << "Charged " << sliceCost << " credits to " << tenantOfJob << " for " << slice
+             << " ms of CPU (balance " << left << ")";
+        Logger::instance().info("billing", jobId, bill.str());
+    }
+
     if (finished) {
         Job done;
         getJob(jobId, done);
@@ -386,6 +396,15 @@ double Engine::tenantCredits(const std::string& tenantId) const {
     std::lock_guard<std::mutex> lock(creditsMutex_);
     auto it = credits_.find(tenantId);
     return it == credits_.end() ? 1000.0 : it->second;
+}
+
+double Engine::chargeTenant(const std::string& tenantId, double amount) {
+    std::lock_guard<std::mutex> lock(creditsMutex_);
+    auto it = credits_.find(tenantId);
+    double balance = it == credits_.end() ? 1000.0 : it->second;
+    balance = std::max(0.0, balance - amount);
+    credits_[tenantId] = balance;
+    return balance;
 }
 
 std::map<std::string, double> Engine::allTenantCredits() const {
