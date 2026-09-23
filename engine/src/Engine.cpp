@@ -76,6 +76,20 @@ SubmitResult Engine::submit(Job job) {
         res.message = "Job requests more memory than the node owns";
         return res;
     }
+    if (!job.tenantId.empty()) {
+        double balance = tenantCredits(job.tenantId);
+        double needed = job.estimatedCredits();
+        if (balance < needed) {
+            std::ostringstream oss;
+            oss.setf(std::ios::fixed);
+            oss.precision(2);
+            oss << "Insufficient credits: " << job.tenantId << " has " << balance
+                << " but this job needs about " << needed;
+            res.message = oss.str();
+            Logger::instance().warn("billing", -1, res.message);
+            return res;
+        }
+    }
 
     job.id = nextId_.fetch_add(1);
     job.submittedAtMs = nowMs();
