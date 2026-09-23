@@ -256,6 +256,7 @@ void Engine::execute(long long jobId, long long quantumMs) {
         if (job.firstRunAtMs < 0) job.firstRunAtMs = now;
         if (job.startedAtMs < 0) job.startedAtMs = now;
         job.status = JobStatus::RUNNING;
+        job.workerId = ThreadPool::currentWorkerIndex();
         job.contextSwitches++;
         contextSwitches_.fetch_add(1);
         slice = std::min<long long>(quantumMs, job.remainingMs);
@@ -282,10 +283,13 @@ void Engine::execute(long long jobId, long long quantumMs) {
         }
         job.cpuTimeUsedMs += slice;
         job.remainingMs = std::max<long long>(0, job.remainingMs - slice);
+        // Bill the slice that was actually executed, not an estimate.
+        sliceCost = job.chargedCredits(slice);
+        job.creditsCharged += sliceCost;
+        tenantOfJob = job.tenantId;
         if (job.remainingMs == 0) {
             job.status = JobStatus::COMPLETED;
             job.completedAtMs = nowMs();
-            job.creditsCharged = job.chargedCredits(job.cpuTimeUsedMs);
             finished = true;
         } else {
             job.status = JobStatus::READY;
