@@ -48,6 +48,7 @@ struct Job {
     long long lastEnqueuedAtMs = 0;
 
     int queueLevel = 0;               // MLFQ level 0..3
+    int workerId = -1;                // pool worker that last ran this job
     int contextSwitches = 0;
     int preemptions = 0;
     double lastScore = 0.0;

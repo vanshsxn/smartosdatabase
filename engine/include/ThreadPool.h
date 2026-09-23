@@ -28,6 +28,10 @@ public:
     bool submit(std::function<void()> task);
     void shutdown();
 
+    // Index of the pool worker running on the calling thread, or -1 when the
+    // caller is not a pool worker. Used to report "Worker #N" for a job.
+    static int currentWorkerIndex();
+
     size_t workerCount() const { return workers_.size(); }
     size_t activeTasks() const { return active_.load(); }
     size_t queuedTasks() const;
@@ -35,7 +39,7 @@ public:
     bool running() const { return !stopping_.load(); }
 
 private:
-    void workerLoop();
+    void workerLoop(int index);
 
     mutable std::mutex mutex_;
     std::condition_variable condition_;

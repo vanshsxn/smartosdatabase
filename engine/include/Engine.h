@@ -84,6 +84,8 @@ public:
     void setTenantCredits(const std::string& tenantId, double credits);
     double tenantCredits(const std::string& tenantId) const;
     std::map<std::string, double> allTenantCredits() const;
+    // Deducts real consumption from the tenant pool; returns the new balance.
+    double chargeTenant(const std::string& tenantId, double amount);
 
 private:
     void dispatchLoop();

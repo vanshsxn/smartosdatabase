@@ -76,6 +76,20 @@ SubmitResult Engine::submit(Job job) {
         res.message = "Job requests more memory than the node owns";
         return res;
     }
+    if (!job.tenantId.empty()) {
+        double balance = tenantCredits(job.tenantId);
+        double needed = job.estimatedCredits();
+        if (balance < needed) {
+            std::ostringstream oss;
+            oss.setf(std::ios::fixed);
+            oss.precision(2);
+            oss << "Insufficient credits: " << job.tenantId << " has " << balance
+                << " but this job needs about " << needed;
+            res.message = oss.str();
+            Logger::instance().warn("billing", -1, res.message);
+            return res;
+        }
+    }
 
     job.id = nextId_.fetch_add(1);
     job.submittedAtMs = nowMs();
@@ -242,6 +256,7 @@ void Engine::execute(long long jobId, long long quantumMs) {
         if (job.firstRunAtMs < 0) job.firstRunAtMs = now;
         if (job.startedAtMs < 0) job.startedAtMs = now;
         job.status = JobStatus::RUNNING;
+        job.workerId = ThreadPool::currentWorkerIndex();
         job.contextSwitches++;
         contextSwitches_.fetch_add(1);
         slice = std::min<long long>(quantumMs, job.remainingMs);
@@ -254,6 +269,8 @@ void Engine::execute(long long jobId, long long quantumMs) {
 
     bool finished = false;
     bool preempted = false;
+    double sliceCost = 0.0;
+    std::string tenantOfJob;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = jobs_.find(jobId);
@@ -268,10 +285,13 @@ void Engine::execute(long long jobId, long long quantumMs) {
         }
         job.cpuTimeUsedMs += slice;
         job.remainingMs = std::max<long long>(0, job.remainingMs - slice);
+        // Bill the slice that was actually executed, not an estimate.
+        sliceCost = job.chargedCredits(slice);
+        job.creditsCharged += sliceCost;
+        tenantOfJob = job.tenantId;
         if (job.remainingMs == 0) {
             job.status = JobStatus::COMPLETED;
             job.completedAtMs = nowMs();
-            job.creditsCharged = job.chargedCredits(job.cpuTimeUsedMs);
             finished = true;
         } else {
             job.status = JobStatus::READY;
@@ -283,6 +303,16 @@ void Engine::execute(long long jobId, long long quantumMs) {
     }
 
     resources_.release(jobId);
+
+    if (!tenantOfJob.empty() && sliceCost > 0.0) {
+        double left = chargeTenant(tenantOfJob, sliceCost);
+        std::ostringstream bill;
+        bill.setf(std::ios::fixed);
+        bill.precision(3);
+        bill << "Charged " << sliceCost << " credits to " << tenantOfJob << " for " << slice
+             << " ms of CPU (balance " << left << ")";
+        Logger::instance().info("billing", jobId, bill.str());
+    }
 
     if (finished) {
         Job done;
@@ -366,6 +396,15 @@ double Engine::tenantCredits(const std::string& tenantId) const {
     std::lock_guard<std::mutex> lock(creditsMutex_);
     auto it = credits_.find(tenantId);
     return it == credits_.end() ? 1000.0 : it->second;
+}
+
+double Engine::chargeTenant(const std::string& tenantId, double amount) {
+    std::lock_guard<std::mutex> lock(creditsMutex_);
+    auto it = credits_.find(tenantId);
+    double balance = it == credits_.end() ? 1000.0 : it->second;
+    balance = std::max(0.0, balance - amount);
+    credits_[tenantId] = balance;
+    return balance;
 }
 
 std::map<std::string, double> Engine::allTenantCredits() const {

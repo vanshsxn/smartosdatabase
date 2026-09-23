@@ -43,6 +43,7 @@ void writeJob(json::Writer& w, const Job& job) {
     w.kv("turnaroundMs", job.completedAtMs > 0 ? job.completedAtMs - job.submittedAtMs : 0LL);
     w.kv("responseMs", job.firstRunAtMs >= 0 ? job.firstRunAtMs - job.submittedAtMs : -1LL);
     w.kv("queueLevel", job.queueLevel);
+    w.kv("workerId", job.workerId);
     w.kv("contextSwitches", job.contextSwitches);
     w.kv("preemptions", job.preemptions);
     w.kv("memoryBase", job.memoryBase);
@@ -260,7 +261,12 @@ int main() {
     server.route("POST", "/api/tenants/credits", [&](const HttpRequest& req) {
         auto body = json::parseFlat(req.body);
         std::string tenant = json::toStr(body, "tenantId");
-        double credits = static_cast<double>(json::toInt(body, "credits", 0));
+        double credits = 0.0;
+        try {
+            credits = std::stod(json::toStr(body, "credits", "0"));
+        } catch (...) {
+            credits = 0.0;
+        }
         engine.setTenantCredits(tenant, credits);
         json::Writer w;
         w.beginObject().kv("tenantId", tenant).kv("credits", credits).endObject();
