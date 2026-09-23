@@ -269,6 +269,8 @@ void Engine::execute(long long jobId, long long quantumMs) {
 
     bool finished = false;
     bool preempted = false;
+    double sliceCost = 0.0;
+    std::string tenantOfJob;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = jobs_.find(jobId);
