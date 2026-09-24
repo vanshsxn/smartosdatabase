@@ -6,7 +6,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { fmtMs } from "@/components/dashboard-bits";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { jobsQuery, metricsQuery } from "@/lib/engine-queries";
-import { TENANTS, tenantName, useSession } from "@/lib/session";
+import { tenantName, useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/reports")({
   head: () => ({
@@ -34,12 +34,12 @@ function ReportsPage() {
   const metrics = useQuery(metricsQuery);
   const list = jobs.data ?? [];
 
-  const byTenant = TENANTS.map((t) => ({
-    name: t.name,
-    jobs: list.filter((j) => j.tenantId === t.id).length,
+  const byTenant = [...new Set(list.map((j) => j.tenantId))].map((id) => ({
+    name: tenantName(id),
+    jobs: list.filter((j) => j.tenantId === id).length,
     credits: Number(
       list
-        .filter((j) => j.tenantId === t.id)
+        .filter((j) => j.tenantId === id)
         .reduce((s, j) => s + (j.creditsCharged || 0), 0)
         .toFixed(2),
     ),

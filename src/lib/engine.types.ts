@@ -19,6 +19,7 @@ export interface Job {
   turnaroundMs: number;
   responseMs: number;
   queueLevel: number;
+  workerId?: number;
   contextSwitches: number;
   preemptions: number;
   memoryBase: number;

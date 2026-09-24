@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/select";
 import { submitJob } from "@/lib/engine";
 import type { JobPriority } from "@/lib/engine.types";
-import { TENANTS, useSession } from "@/lib/session";
+import { useSession } from "@/lib/session";
+import { JOB_PRESETS, estimateCredits, resourcesFor } from "@/lib/job-presets";
 
 export const Route = createFileRoute("/submit")({
   head: () => ({
@@ -40,30 +41,19 @@ export const Route = createFileRoute("/submit")({
 });
 
 function SubmitPage() {
-  const { tenantId, user } = useSession();
+  const { tenants } = useSession();
   const qc = useQueryClient();
   const navigate = useNavigate();
 
-  const [name, setName] = useState("image-processing");
-  const [type, setType] = useState("COMPUTE");
+  const [type, setType] = useState(JOB_PRESETS[0]!.type);
+  const [name, setName] = useState(JOB_PRESETS[0]!.defaultName);
   const [priority, setPriority] = useState<JobPriority>("MEDIUM");
-  const [tenant, setTenant] = useState(tenantId || "tenant-a");
-  const [cores, setCores] = useState(2);
-  const [memory, setMemory] = useState(512);
-  const [burst, setBurst] = useState(3000);
+  const preset = JOB_PRESETS.find((p) => p.type === type) ?? JOB_PRESETS[0]!;
+  const plan = resourcesFor(type, priority);
 
   const submit = useMutation({
-    mutationFn: () =>
-      submitJob({
-        name,
-        type,
-        priority,
-        tenantId: tenant,
-        userId: user?.email ?? "operator",
-        requestedCores: cores,
-        requestedMemoryMb: memory,
-        estimatedMs: burst,
-      }),
+    // Tenant and user are attached on the server from the signed-in account.
+    mutationFn: () => submitJob({ name, type, priority, ...plan }),
     onSuccess: (res) => {
       if (!res.accepted) {
         toast.error(res.message);
@@ -80,7 +70,7 @@ function SubmitPage() {
     <AppLayout title="Submit Job">
       <Card className="max-w-3xl">
         <CardHeader>
-          <CardTitle className="text-base">New job request</CardTitle>
+          <CardTitle className="text-base">New job for {tenants[0]?.name ?? "your workspace"}</CardTitle>
         </CardHeader>
         <CardContent>
           <form
@@ -90,22 +80,28 @@ function SubmitPage() {
               submit.mutate();
             }}
           >
-            <Field label="Job name">
-              <Input value={name} onChange={(e) => setName(e.target.value)} required />
-            </Field>
             <Field label="Job type">
-              <Select value={type} onValueChange={setType}>
+              <Select
+                value={type}
+                onValueChange={(v) => {
+                  setType(v);
+                  setName(JOB_PRESETS.find((p) => p.type === v)?.defaultName ?? name);
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {["COMPUTE", "IO", "BATCH", "ML_TRAINING", "REPORT"].map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
+                  {JOB_PRESETS.map((p) => (
+                    <SelectItem key={p.type} value={p.type}>
+                      {p.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </Field>
+            <Field label="Job name">
+              <Input value={name} onChange={(e) => setName(e.target.value)} required maxLength={60} />
             </Field>
             <Field label="Priority">
               <Select value={priority} onValueChange={(v) => setPriority(v as JobPriority)}>
@@ -121,51 +117,18 @@ function SubmitPage() {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Tenant">
-              <Select value={tenant} onValueChange={setTenant}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TENANTS.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Requested cores">
-              <Input
-                type="number"
-                min={1}
-                max={64}
-                value={cores}
-                onChange={(e) => setCores(Number(e.target.value))}
-              />
-            </Field>
-            <Field label="Requested memory (MB)">
-              <Input
-                type="number"
-                min={64}
-                step={64}
-                value={memory}
-                onChange={(e) => setMemory(Number(e.target.value))}
-              />
-            </Field>
-            <Field label="Estimated burst (ms)">
-              <Input
-                type="number"
-                min={100}
-                step={100}
-                value={burst}
-                onChange={(e) => setBurst(Number(e.target.value))}
-              />
-            </Field>
             <div className="flex items-end">
               <Button type="submit" className="w-full" disabled={submit.isPending}>
-                {submit.isPending ? "Submitting…" : "Submit job"}
+                {submit.isPending ? "Submitting…" : "Run job"}
               </Button>
+            </div>
+            <div className="rounded-md border border-border bg-muted/30 p-3 text-sm sm:col-span-2">
+              <p className="text-muted-foreground">{preset.description}</p>
+              <p className="mt-2">
+                System allocation: <b>{plan.requestedCores} cores</b> · <b>{plan.requestedMemoryMb} MB</b> ·
+                about <b>{(plan.estimatedMs / 1000).toFixed(0)} s</b> CPU · est.{" "}
+                <b>{estimateCredits(type, priority).toFixed(2)} credits</b>
+              </p>
             </div>
           </form>
         </CardContent>

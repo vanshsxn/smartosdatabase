@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useAlerts } from "@/lib/alerts";
 import { healthQuery, resourcesQuery } from "@/lib/engine-queries";
-import { TENANTS, useSession } from "@/lib/session";
+import { tenantName, useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -39,7 +39,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
-  const { user, tenantId, setTenantId, signOut } = useSession();
+  const { user, ownTenantId, isAdmin, signOut } = useSession();
   const health = useQuery(healthQuery);
   const resources = useQuery(resourcesQuery);
   const { rules, saveRules, saving } = useAlerts();
@@ -53,22 +53,8 @@ function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Row label="Signed in as" value={user?.email ?? "Not signed in"} />
-            <div className="space-y-1.5">
-              <Label>Default tenant</Label>
-              <Select value={tenantId || "all"} onValueChange={(v) => setTenantId(v === "all" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All tenants</SelectItem>
-                  {TENANTS.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Row label="Account type" value={isAdmin ? "Administrator (all tenants)" : "Tenant"} />
+            <Row label="Tenant" value={`${tenantName(ownTenantId)} (${ownTenantId})`} />
             <Button variant="outline" onClick={signOut}>
               Sign out
             </Button>

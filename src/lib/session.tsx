@@ -7,16 +7,12 @@ import { supabase } from "@/integrations/supabase/client";
 export interface Tenant {
   id: string;
   name: string;
-  plan: string;
-  totalCredits: number;
+  email: string;
 }
 
-export const TENANTS: Tenant[] = [
-  { id: "tenant-a", name: "Tenant A", plan: "Enterprise", totalCredits: 1000 },
-  { id: "tenant-b", name: "Tenant B", plan: "Business", totalCredits: 1000 },
-  { id: "tenant-c", name: "Tenant C", plan: "Business", totalCredits: 1000 },
-  { id: "tenant-d", name: "Tenant D", plan: "Starter", totalCredits: 1000 },
-];
+// Registry of known tenants (the caller's own, or all of them for admins),
+// filled from the database so labels never depend on hard-coded tenants.
+const registry = new Map<string, Tenant>();
 
 export interface SessionUser {
   id: string;
@@ -28,7 +24,10 @@ export interface SessionUser {
 interface SessionValue {
   user: SessionUser | null;
   session: Session | null;
-  tenantId: string; // "" means all tenants
+  tenantId: string; // admin: "" means all tenants; tenant accounts: always their own
+  ownTenantId: string;
+  isAdmin: boolean;
+  tenants: Tenant[];
   ready: boolean;
   signOut: () => Promise<void>;
   setTenantId: (id: string) => void;
@@ -54,6 +53,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [tenantId, setTenantIdState] = useState<string>("");
   const [ready, setReady] = useState(false);
+  const [ownTenantId, setOwnTenantId] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
@@ -72,28 +74,46 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // Load the persisted profile (display name + selected tenant) for the signed-in user.
+  // Load profile, role and the tenant list for the signed-in user.
   useEffect(() => {
     const uid = session?.user?.id;
-    if (!uid) return;
+    if (!uid) {
+      setIsAdmin(false);
+      setOwnTenantId("");
+      setTenants([]);
+      return;
+    }
     let cancelled = false;
     void (async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("display_name, tenant_id")
-        .eq("id", uid)
-        .maybeSingle();
+      const [{ data: profile }, { data: admin }] = await Promise.all([
+        supabase.from("profiles").select("display_name, tenant_id, email").eq("id", uid).maybeSingle(),
+        supabase.rpc("has_role", { _user_id: uid, _role: "admin" }),
+      ]);
       if (cancelled) return;
-      if (data) {
-        setTenantIdState(data.tenant_id ?? "");
-        if (session?.user) setUser(toUser(session.user, data.display_name));
+      const adminFlag = admin === true;
+      const own = profile?.tenant_id ?? `tenant-${uid.replace(/-/g, "").slice(0, 10)}`;
+      setIsAdmin(adminFlag);
+      setOwnTenantId(own);
+      if (session?.user) setUser(toUser(session.user, profile?.display_name));
+
+      let list: Tenant[] = [];
+      if (adminFlag) {
+        const { data: all } = await supabase
+          .from("profiles")
+          .select("tenant_id, email, display_name")
+          .order("created_at");
+        list = (all ?? [])
+          .filter((p) => p.tenant_id !== own)
+          .map((p) => ({ id: p.tenant_id, email: p.email ?? "", name: p.display_name || p.email || p.tenant_id }));
+        setTenantIdState("");
       } else {
-        await supabase.from("profiles").insert({
-          id: uid,
-          email: session?.user?.email ?? null,
-          display_name: session?.user?.email?.split("@")[0] ?? null,
-        });
+        list = [{ id: own, email: profile?.email ?? "", name: profile?.display_name || "My workspace" }];
+        setTenantIdState(own);
       }
+      if (cancelled) return;
+      registry.clear();
+      list.forEach((t) => registry.set(t.id, t));
+      setTenants(list);
     })();
     return () => {
       cancelled = true;
@@ -108,18 +128,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const setTenantId = useCallback(
     (id: string) => {
-      setTenantIdState(id);
-      const uid = session?.user?.id;
-      if (uid) {
-        void supabase.from("profiles").update({ tenant_id: id }).eq("id", uid);
-      }
+      // Only admins can switch tenants; tenant accounts stay on their own.
+      if (isAdmin) setTenantIdState(id);
     },
-    [session],
+    [isAdmin],
   );
 
   const value = useMemo(
-    () => ({ user, session, tenantId, ready, signOut, setTenantId }),
-    [user, session, tenantId, ready, signOut, setTenantId],
+    () => ({ user, session, tenantId, ownTenantId, isAdmin, tenants, ready, signOut, setTenantId }),
+    [user, session, tenantId, ownTenantId, isAdmin, tenants, ready, signOut, setTenantId],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
@@ -132,5 +149,7 @@ export function useSession() {
 }
 
 export function tenantName(id: string) {
-  return TENANTS.find((t) => t.id === id)?.name ?? (id || "Unassigned");
+  if (!id) return "Unassigned";
+  if (id === "tenant-admin") return "Admin";
+  return registry.get(id)?.name ?? id;
 }

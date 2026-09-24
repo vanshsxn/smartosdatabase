@@ -1,3 +1,4 @@
+import { supabase } from "@/integrations/supabase/client";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -54,9 +55,16 @@ export function EngineStreamProvider({ children }: { children: ReactNode }) {
     let retry: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
 
-    const connect = () => {
+    const connect = async () => {
       if (stopped) return;
-      const es = new EventSource("/api/engine/stream");
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        retry = setTimeout(connect, 3000);
+        return;
+      }
+      if (stopped) return;
+      const es = new EventSource(`/api/engine/stream?access_token=${encodeURIComponent(token)}`);
       sourceRef.current = es;
 
       es.addEventListener("open", () => setConnected(true));
