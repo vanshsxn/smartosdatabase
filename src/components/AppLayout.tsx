@@ -15,6 +15,8 @@ import {
   PlusSquare,
   Settings,
   Users,
+  GitBranch,
+  ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -27,7 +29,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { healthQuery } from "@/lib/engine-queries";
-import { TENANTS, useSession } from "@/lib/session";
+import { useSession } from "@/lib/session";
+import { useJobProgressSync } from "@/lib/useJobProgressSync";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -36,16 +39,18 @@ const NAV = [
   { to: "/jobs", label: "All Jobs", icon: ListTree },
   { to: "/scheduler", label: "Scheduler", icon: Clock },
   { to: "/resources", label: "Resources", icon: MonitorCog },
-  { to: "/tenants", label: "Tenants", icon: Users },
+  { to: "/tenants", label: "Admin Panel", icon: ShieldCheck, admin: true },
+  { to: "/deployments", label: "Deployments", icon: GitBranch },
   { to: "/billing", label: "Billing", icon: DollarSign },
   { to: "/logs", label: "Logs", icon: FileText },
   { to: "/progress", label: "Progress", icon: Activity },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/settings", label: "Settings", icon: Settings },
-] as const;
+] as { to: string; label: string; icon: typeof Users; admin?: boolean }[];
 
 export function AppLayout({ title, children }: { title: string; children: ReactNode }) {
-  const { user, ready, tenantId, setTenantId, signOut } = useSession();
+  const { user, ready, tenantId, setTenantId, signOut, isAdmin, tenants } = useSession();
+  useJobProgressSync(Boolean(user));
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [open, setOpen] = useState(false);
@@ -81,12 +86,12 @@ export function AppLayout({ title, children }: { title: string; children: ReactN
           Main menu
         </p>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3">
-          {NAV.map(({ to, label, icon: Icon }) => {
+          {NAV.filter((n) => !n.admin || isAdmin).map(({ to, label, icon: Icon }) => {
             const active = to === "/" ? pathname === "/" : pathname.startsWith(to);
             return (
               <Link
                 key={to}
-                to={to}
+                to={to as "/"}
                 onClick={() => setOpen(false)}
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
@@ -134,19 +139,25 @@ export function AppLayout({ title, children }: { title: string; children: ReactN
           </Button>
           <h1 className="text-xl font-semibold sm:text-2xl">{title}</h1>
           <div className="ml-auto flex items-center gap-3">
-            <Select value={tenantId || "all"} onValueChange={(v) => setTenantId(v === "all" ? "" : v)}>
-              <SelectTrigger className="w-[190px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tenant: All Tenants</SelectItem>
-                {TENANTS.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    Tenant: {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isAdmin ? (
+              <Select value={tenantId || "all"} onValueChange={(v) => setTenantId(v === "all" ? "" : v)}>
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Admin · All tenants</SelectItem>
+                  {tenants.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <span className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground">
+                {tenants[0]?.name ?? "My workspace"}
+              </span>
+            )}
             <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
               <Activity className="h-4 w-4" />
               {online ? "Engine online" : "Engine offline"}
