@@ -1,3 +1,4 @@
+import { supabase } from "@/integrations/supabase/client";
 import type {
   CancelResult,
   CreditsResult,
@@ -21,7 +22,10 @@ import type {
 } from "./engine.types";
 
 async function proxy(path: string, init?: RequestInit) {
-  const res = await fetch(`/api/engine/${path}`, init);
+  const { data } = await supabase.auth.getSession();
+  const headers = new Headers(init?.headers);
+  if (data.session?.access_token) headers.set("Authorization", `Bearer ${data.session.access_token}`);
+  const res = await fetch(`/api/engine/${path}`, { ...init, headers });
   if (!res.ok) {
     const text = await res.text().catch(() => "unknown error");
     throw new Error(`Engine proxy error ${res.status}: ${text}`);
@@ -39,6 +43,11 @@ export async function getJobs(tenantId?: string, limit = 200): Promise<Job[]> {
   if (limit !== 200) params.set("limit", String(limit));
   const query = params.toString();
   const res: JobsResponse = await proxy(`jobs${query ? `?${query}` : ""}`);
+  return res.jobs;
+}
+
+export async function getJobsAll(limit = 500): Promise<Job[]> {
+  const res: JobsResponse = await proxy(`jobs?limit=${limit}`);
   return res.jobs;
 }
 
