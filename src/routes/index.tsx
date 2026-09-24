@@ -58,7 +58,7 @@ import {
   resourcesQuery,
   tenantCreditsQuery,
 } from "@/lib/engine-queries";
-import { TENANTS, tenantName, useSession } from "@/lib/session";
+import { tenantName, useSession } from "@/lib/session";
 import { useEngineStream } from "@/lib/engine-stream";
 
 export const Route = createFileRoute("/")({
@@ -440,13 +440,13 @@ function DashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {TENANTS.map((t) => {
-                  const totalCredits = creditMap.get(t.id) ?? t.totalCredits;
-                  const used = Math.round(usedByTenant.get(t.id) ?? 0);
-                  const remaining = Math.max(0, Math.round(totalCredits - used));
+                {[...creditMap.keys()].slice(0, 6).map((id) => {
+                  const remaining = Math.round(creditMap.get(id) ?? 0);
+                  const used = Math.round(usedByTenant.get(id) ?? 0);
+                  const totalCredits = remaining + used;
                   return (
-                    <TableRow key={t.id}>
-                      <TableCell>{t.name}</TableCell>
+                    <TableRow key={id}>
+                      <TableCell>{tenantName(id)}</TableCell>
                       <TableCell className="tabular-nums">{used}</TableCell>
                       <TableCell className="tabular-nums">{Math.round(totalCredits)}</TableCell>
                       <TableCell className="text-right tabular-nums">{remaining}</TableCell>
