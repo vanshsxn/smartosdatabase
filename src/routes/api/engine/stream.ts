@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { resolveCaller } from "@/lib/engine-auth.server";
 
 // Server-push telemetry stream. The dashboard opens a single persistent
 // connection and the server pushes an engine snapshot every tick, so the
@@ -7,6 +8,10 @@ export const Route = createFileRoute("/api/engine/stream")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        const caller = await resolveCaller(request);
+        if (!caller) return Response.json({ error: "Sign in required" }, { status: 401 });
+        const scope = <T extends { tenantId: string }>(rows: T[]) =>
+          caller.isAdmin ? rows : rows.filter((r) => r.tenantId === caller.tenantId);
         const rawEngineUrl = (process.env["ENGINE_URL"] ?? "").trim();
         const isDev = process.env["NODE_ENV"] !== "production";
         if (!rawEngineUrl && !isDev) {
@@ -69,8 +74,8 @@ export const Route = createFileRoute("/api/engine/stream")({
                   health,
                   metrics,
                   resources,
-                  jobs: jobs?.jobs ?? [],
-                  tenants: tenants?.tenants ?? [],
+                  jobs: scope(jobs?.jobs ?? []),
+                  tenants: scope(tenants?.tenants ?? []),
                 });
               } catch (err) {
                 send("snapshot", {
