@@ -50,9 +50,27 @@ async function guarded(request: Request, splat: string) {
 
   const caller = await resolveCaller(request);
   if (!caller) return deny(401, "Sign in required");
+  const method = request.method;
+
+  // Credits live in the database ledger (charged on admin approval).
+  if (path === "tenants" && method === "GET") {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data } = await supabaseAdmin.from("tenant_credits").select("tenant_id, balance");
+    const all = (data ?? []).map((r) => ({ tenantId: r.tenant_id, credits: Number(r.balance) }));
+    const list = caller.isAdmin ? all : all.filter((t) => t.tenantId === caller.tenantId);
+    if (!caller.isAdmin && !list.length) list.push({ tenantId: caller.tenantId, credits: 100 });
+    return Response.json({ tenants: list }, { headers: { "cache-control": "no-store" } });
+  }
+  if (path === "tenants/credits" && method === "POST" && caller.isAdmin) {
+    const body = (await request.json().catch(() => ({}))) as { tenantId?: string; credits?: number };
+    if (!body.tenantId || typeof body.credits !== "number" || body.credits < 0) return deny(400, "Invalid credits");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("tenant_credits").upsert({ tenant_id: body.tenantId, balance: body.credits });
+    return Response.json({ tenantId: body.tenantId, credits: body.credits });
+  }
+
   if (caller.isAdmin) return proxyToEngine(request, path);
 
-  const method = request.method;
   if (method !== "GET" && ADMIN_ONLY.includes(path)) return deny(403, "Admin only");
 
   const url = new URL(request.url);
@@ -62,14 +80,9 @@ async function guarded(request: Request, splat: string) {
     return proxyToEngine(new Request(url, request), path);
   }
 
+  // Tenants must submit through the approval queue (Submit Job page).
   if (path === "jobs" && method === "POST") {
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    body["tenantId"] = caller.tenantId;
-    body["userId"] = caller.email || caller.userId;
-    return proxyToEngine(
-      new Request(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
-      path,
-    );
+    return deny(403, "Jobs must be submitted for admin approval from the Submit Job page");
   }
 
   if (/^jobs\/\d+$/.test(path)) {
@@ -79,15 +92,6 @@ async function guarded(request: Request, splat: string) {
     if (job.tenantId !== caller.tenantId) return deny(404, "Job not found");
     if (method === "GET") return Response.json(job, { headers: { "cache-control": "no-store" } });
     return proxyToEngine(request, path);
-  }
-
-  if (path === "tenants" && method === "GET") {
-    const res = await proxyToEngine(request, path);
-    if (!res.ok) return res;
-    const data = (await res.json()) as { tenants?: { tenantId: string; credits: number }[] };
-    const own = (data.tenants ?? []).filter((t) => t.tenantId === caller.tenantId);
-    if (!own.length) own.push({ tenantId: caller.tenantId, credits: 1000 });
-    return Response.json({ tenants: own }, { headers: { "cache-control": "no-store" } });
   }
 
   if (path === "logs" && method === "GET") {

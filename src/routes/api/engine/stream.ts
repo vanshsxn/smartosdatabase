@@ -66,7 +66,12 @@ export const Route = createFileRoute("/api/engine/stream")({
                   fetchJson("/api/metrics"),
                   fetchJson("/api/resources"),
                   fetchJson("/api/jobs?limit=200"),
-                  fetchJson("/api/tenants").catch(() => ({ tenants: [] })),
+                  import("@/integrations/supabase/client.server")
+                    .then(({ supabaseAdmin }) => supabaseAdmin.from("tenant_credits").select("tenant_id, balance"))
+                    .then(({ data }) => ({
+                      tenants: (data ?? []).map((r) => ({ tenantId: r.tenant_id, credits: Number(r.balance) })),
+                    }))
+                    .catch(() => ({ tenants: [] })),
                 ]);
                 send("snapshot", {
                   ts: Date.now(),

@@ -85,6 +85,7 @@ export type Database = {
           id: string
           job_id: number | null
           repo_full_name: string
+          request_id: string | null
           run_id: string | null
           status: string
           tenant_id: string
@@ -98,6 +99,7 @@ export type Database = {
           id?: string
           job_id?: number | null
           repo_full_name: string
+          request_id?: string | null
           run_id?: string | null
           status?: string
           tenant_id: string
@@ -111,6 +113,7 @@ export type Database = {
           id?: string
           job_id?: number | null
           repo_full_name?: string
+          request_id?: string | null
           run_id?: string | null
           status?: string
           tenant_id?: string
@@ -167,6 +170,69 @@ export type Database = {
         }
         Relationships: []
       }
+      job_requests: {
+        Row: {
+          cores: number
+          created_at: string
+          decided_at: string | null
+          email: string | null
+          engine_job_id: number | null
+          estimated_credits: number
+          estimated_ms: number
+          id: string
+          input: string | null
+          memory_mb: number
+          name: string
+          output: string | null
+          priority: string
+          reason: string | null
+          status: string
+          tenant_id: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          cores: number
+          created_at?: string
+          decided_at?: string | null
+          email?: string | null
+          engine_job_id?: number | null
+          estimated_credits: number
+          estimated_ms: number
+          id?: string
+          input?: string | null
+          memory_mb: number
+          name: string
+          output?: string | null
+          priority?: string
+          reason?: string | null
+          status?: string
+          tenant_id: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          cores?: number
+          created_at?: string
+          decided_at?: string | null
+          email?: string | null
+          engine_job_id?: number | null
+          estimated_credits?: number
+          estimated_ms?: number
+          id?: string
+          input?: string | null
+          memory_mb?: number
+          name?: string
+          output?: string | null
+          priority?: string
+          reason?: string | null
+          status?: string
+          tenant_id?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -189,6 +255,24 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tenant_credits: {
+        Row: {
+          balance: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          balance?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          balance?: number
           tenant_id?: string
           updated_at?: string
         }
