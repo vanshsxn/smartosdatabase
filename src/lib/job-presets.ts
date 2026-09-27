@@ -12,9 +12,15 @@ export interface JobPreset {
   memoryMb: number;
   estimatedMs: number;
   defaultName: string;
+  /** AI jobs run a real model call on the uploaded/pasted input. */
+  ai?: { instructions: string; inputLabel: string };
 }
 
 export const JOB_PRESETS: JobPreset[] = [
+  { type: "AI_SUMMARIZE", label: "AI · Summarize document", description: "A real AI model reads your uploaded text/file and writes a summary.", cores: 1, memoryMb: 512, estimatedMs: 4000, defaultName: "ai-summary", ai: { inputLabel: "Text or file to summarize", instructions: "Summarize the user's document in concise Markdown: a 2-sentence overview, then key bullet points." } },
+  { type: "AI_CODE_REVIEW", label: "AI · Code review", description: "A real AI model reviews uploaded code for bugs, security and style.", cores: 2, memoryMb: 1024, estimatedMs: 6000, defaultName: "ai-code-review", ai: { inputLabel: "Code to review", instructions: "Review the code. Reply in Markdown with sections: Bugs, Security, Improvements. Be specific and brief." } },
+  { type: "AI_TRANSLATE", label: "AI · Translate text", description: "A real AI model translates your text (write the target language on the first line).", cores: 1, memoryMb: 512, estimatedMs: 3000, defaultName: "ai-translate", ai: { inputLabel: "First line: target language. Then the text.", instructions: "The first line names the target language. Translate the remaining text into that language. Output only the translation." } },
+  { type: "AI_DATA_INSIGHTS", label: "AI · CSV data insights", description: "Upload a CSV; a real AI model finds trends, outliers and stats.", cores: 2, memoryMb: 1536, estimatedMs: 8000, defaultName: "csv-insights", ai: { inputLabel: "CSV data", instructions: "Analyze this CSV. Reply in Markdown: dataset overview (rows/columns), key statistics, trends, outliers, and 3 recommendations. Only use numbers present in the data." } },
   { type: "IMAGE_PROCESSING", label: "Image processing", description: "Resize, compress and watermark a batch of images.", cores: 2, memoryMb: 512, estimatedMs: 4000, defaultName: "image-batch" },
   { type: "VIDEO_TRANSCODE", label: "Video transcoding", description: "Convert a video to 1080p/720p web formats.", cores: 4, memoryMb: 2048, estimatedMs: 12000, defaultName: "video-transcode" },
   { type: "ML_TRAINING", label: "ML model training", description: "Train a small classification model on a dataset.", cores: 4, memoryMb: 4096, estimatedMs: 20000, defaultName: "model-training" },
