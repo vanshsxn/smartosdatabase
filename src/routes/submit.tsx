@@ -52,7 +52,10 @@ function SubmitPage() {
 
   const onFile = async (f?: File) => {
     if (!f) return;
-    if (f.size > 40000) return toast.error("File too large (max 40 KB of text).");
+    if (f.size > 40000) {
+      toast.error("File too large (max 40 KB of text).");
+      return;
+    }
     setInput(await f.text());
   };
 
