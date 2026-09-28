@@ -6,6 +6,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppLayout } from "@/components/AppLayout";
+import { JobRequestList } from "@/components/JobRequests";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -51,7 +52,7 @@ function TenantsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const balance = (id: string) => credits.data?.find((c) => c.tenantId === id)?.credits ?? 1000;
+  const balance = (id: string) => credits.data?.find((c) => c.tenantId === id)?.credits ?? 100;
 
   const analyze = useMutation({
     mutationFn: async () => {
@@ -160,6 +161,16 @@ function TenantsPage() {
             </Table>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Job requests — allow or deny</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <JobRequestList admin />
+          </CardContent>
+        </Card>
+
 
         <Card>
           <CardHeader className="pb-2">
