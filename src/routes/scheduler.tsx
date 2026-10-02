@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { setEnginePaused, setPolicy } from "@/lib/engine";
 import { healthQuery, metricsQuery, queuesQuery } from "@/lib/engine-queries";
+import { useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/scheduler")({
   head: () => ({
@@ -40,6 +41,7 @@ export const Route = createFileRoute("/scheduler")({
 
 function SchedulerPage() {
   const qc = useQueryClient();
+  const { isAdmin } = useSession();
   const health = useQuery(healthQuery);
   const metrics = useQuery(metricsQuery);
   const queues = useQuery(queuesQuery);
@@ -79,6 +81,7 @@ function SchedulerPage() {
               <Select
                 value={metrics.data?.policy ?? "MLFQ"}
                 onValueChange={(v) => policy.mutate(v)}
+                disabled={!isAdmin || policy.isPending}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -92,7 +95,7 @@ function SchedulerPage() {
             <Button
               className="w-full"
               variant={paused ? "default" : "outline"}
-              disabled={pause.isPending}
+              disabled={!isAdmin || pause.isPending}
               onClick={() => pause.mutate(!paused)}
             >
               {paused ? (
@@ -105,6 +108,13 @@ function SchedulerPage() {
                 </>
               )}
             </Button>
+            {paused && (
+              <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+                The dispatcher is paused — queued jobs will not run until an admin resumes it.
+              </p>
+            )}
+            {!isAdmin && <p className="text-xs text-muted-foreground">Only admins can change the policy or pause the engine.</p>}
+            {health.isError && <p className="text-xs text-destructive">Engine is unreachable right now.</p>}
             <p className="text-xs text-muted-foreground">
               Pausing freezes dispatching; running slices finish and queued jobs stay in place, so
               you can compare waiting times across policies.
