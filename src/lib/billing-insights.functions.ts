@@ -37,17 +37,32 @@ export const explainBilling = createServerFn({ method: "POST" })
     });
     if (isAdmin !== true) throw new Error("Only admins can run billing explanations.");
 
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [{ data: reqs }, { data: credit }] = await Promise.all([
+      supabaseAdmin.from("job_requests")
+        .select("id, name, type, priority, status, cores, memory_mb, estimated_ms, estimated_credits, engine_job_id, reason, created_at, decided_at")
+        .eq("tenant_id", data.tenantId).order("created_at", { ascending: false }).limit(150),
+      supabaseAdmin.from("tenant_credits").select("balance, updated_at").eq("tenant_id", data.tenantId).maybeSingle(),
+    ]);
+    const history = reqs ?? [];
+    if (!history.length && !data.jobs.length)
+      return { text: "This tenant has not submitted any jobs yet, so there are no charges to explain. Their balance is " + Number(credit?.balance ?? data.balance).toFixed(2) + " credits (new accounts start with 100)." };
+    const balanceNow = credit ? Number(credit.balance) : data.balance;
     const key = process.env["LOVABLE_API_KEY"];
     if (!key) throw new Error("AI is not configured.");
 
     const prompt = `Tenant: ${data.tenantName} (${data.tenantId})
-Current credit balance: ${data.balance.toFixed(3)}
+Current credit balance: ${balanceNow.toFixed(3)} (starting balance 100 unless the admin changed it)
+Credits are deducted (estimated_credits) when a job is approved or auto-approved; failed AI jobs are refunded; DENIED jobs cost nothing.
 Billing formula: credits = cores*0.5*seconds + memoryGB*0.25*seconds, charged per executed CPU slice.
 
 Admin notes / question:
 ${data.notes || "(none)"}
 
-Jobs (JSON):
+Job request history from the ledger (JSON):
+${JSON.stringify(history)}
+
+Live engine jobs (JSON):
 ${JSON.stringify(data.jobs)}
 
 Billing / runtime log lines:
