@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { JOB_PRESETS, estimateCredits, resourcesFor } from "./job-presets";
+import { JOB_PRESETS, estimateCredits, isAutoApproved, resourcesFor } from "./job-presets";
 
 const DEFAULT_CREDITS = 100;
 
@@ -43,7 +43,7 @@ export const requestJob = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const preset = JOB_PRESETS.find((p) => p.type === data.type);
     if (!preset) throw new Error("Unknown job type");
-    if (preset.ai && !data.input?.trim()) throw new Error("This AI job needs input text or a file.");
+    if (preset.ai && !data.repo && !data.input?.trim()) throw new Error("Please enter a prompt or upload a file for this job.");
     const { data: profile } = await context.supabase
       .from("profiles").select("tenant_id, email").eq("id", context.userId).maybeSingle();
     const tenantId = profile?.tenant_id ?? `tenant-${context.userId.replace(/-/g, "").slice(0, 10)}`;
@@ -71,7 +71,12 @@ export const requestJob = createServerFn({ method: "POST" })
         status: "PENDING_APPROVAL", request_id: row.id,
       });
     }
-    return { id: row.id as string, estimated: est };
+    if (isAutoApproved(data.type, data.priority)) {
+      const { data: req } = await db.from("job_requests").select("*").eq("id", row.id).single();
+      const r = await executeRequest(req, "Auto-approved (small job)");
+      return { id: row.id as string, estimated: est, auto: true, status: r.status };
+    }
+    return { id: row.id as string, estimated: est, auto: false, status: "PENDING" };
   });
 
 /** Admin approves (charges credits, runs on the engine) or denies a request. */
@@ -94,6 +99,14 @@ export const decideJob = createServerFn({ method: "POST" })
       return { status: "DENIED" };
     }
 
+    return executeRequest(req);
+  });
+
+
+// deno-lint-ignore no-explicit-any
+async function executeRequest(req: any, note?: string): Promise<{ status: string; reason?: string; engineJobId?: number | null }> {
+  const db = await admin();
+  const now = new Date().toISOString();
     const est = Number(req.estimated_credits);
     const balance = await balanceOf(req.tenant_id);
     if (balance < est) {
@@ -139,7 +152,7 @@ export const decideJob = createServerFn({ method: "POST" })
     const preset = JOB_PRESETS.find((p) => p.type === req.type);
     if (preset?.ai) {
       try {
-        const output = await runAi(preset.ai.instructions, req.input ?? "");
+        const output = preset.ai.image ? await runImage(req.input || req.name) : await runAi(preset.ai.instructions, req.input || `Job: ${req.name}`);
         await db.from("job_requests").update({ status: "COMPLETED", output }).eq("id", req.id);
         return { status: "COMPLETED" };
       } catch (e) {
@@ -149,7 +162,7 @@ export const decideJob = createServerFn({ method: "POST" })
       }
     }
     return { status: "RUNNING", engineJobId };
-  });
+}
 
 /** Admin sets a tenant's credit balance. */
 export const setTenantBalance = createServerFn({ method: "POST" })
@@ -199,4 +212,27 @@ async function runAi(instructions: string, input: string): Promise<string> {
     }
   }
   return text.trim() || "The model returned no output.";
+}
+
+async function runImage(prompt: string): Promise<string> {
+  const key = process.env["LOVABLE_API_KEY"];
+  if (!key) throw new Error("AI is not configured");
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "fetch", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-3.1-flash-image",
+      modalities: ["image", "text"],
+      messages: [{ role: "user", content: prompt.slice(0, 4000) }],
+    }),
+  });
+  if (!res.ok) {
+    if (res.status === 429) throw new Error("AI is busy right now, try again shortly.");
+    if (res.status === 402) throw new Error("AI credits are used up for this workspace.");
+    throw new Error(`Image request failed (${res.status})`);
+  }
+  const j = (await res.json()) as { choices?: Array<{ message?: { images?: Array<{ image_url?: { url?: string } }> } }> };
+  const url = j.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  if (!url) throw new Error("The model returned no image.");
+  return url;
 }

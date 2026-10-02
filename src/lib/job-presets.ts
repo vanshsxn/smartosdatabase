@@ -48,3 +48,9 @@ export function estimateCredits(type: string, priority: JobPriority) {
   const s = r.estimatedMs / 1000;
   return r.requestedCores * 0.5 * s + (r.requestedMemoryMb / 1024) * 0.25 * s;
 }
+
+/** Jobs at or below this cost (and ≤2 cores) run immediately without admin approval. */
+export const AUTO_APPROVE_MAX_CREDITS = 5;
+export function isAutoApproved(type: string, priority: JobPriority) {
+  return estimateCredits(type, priority) <= AUTO_APPROVE_MAX_CREDITS && resourcesFor(type, priority).requestedCores <= 2;
+}
