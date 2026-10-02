@@ -146,7 +146,7 @@ async function executeRequest(req: any, note?: string): Promise<{ status: string
       return { status: "FAILED", reason: engineError };
     }
 
-    await db.from("job_requests").update({ status: "RUNNING", engine_job_id: engineJobId, decided_at: now }).eq("id", req.id);
+    await db.from("job_requests").update({ status: "RUNNING", engine_job_id: engineJobId, decided_at: now, reason: note ?? null }).eq("id", req.id);
     await db.from("github_deployments").update({ status: "BUILDING", job_id: engineJobId }).eq("request_id", req.id);
 
     const preset = JOB_PRESETS.find((p) => p.type === req.type);
@@ -157,7 +157,9 @@ async function executeRequest(req: any, note?: string): Promise<{ status: string
         return { status: "COMPLETED" };
       } catch (e) {
         const msg = e instanceof Error ? e.message : "AI failed";
-        await db.from("job_requests").update({ status: "FAILED", reason: msg }).eq("id", req.id);
+        const cur = await balanceOf(req.tenant_id);
+        await db.from("tenant_credits").update({ balance: cur + est, updated_at: new Date().toISOString() }).eq("tenant_id", req.tenant_id);
+        await db.from("job_requests").update({ status: "FAILED", reason: `${msg} (credits refunded)` }).eq("id", req.id);
         return { status: "FAILED", reason: msg };
       }
     }

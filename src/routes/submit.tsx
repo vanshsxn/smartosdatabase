@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { JobPriority } from "@/lib/engine.types";
-import { JOB_PRESETS, estimateCredits, resourcesFor } from "@/lib/job-presets";
+import { JOB_PRESETS, estimateCredits, isAutoApproved, resourcesFor } from "@/lib/job-presets";
 import { requestJob } from "@/lib/job-requests.functions";
 
 export const Route = createFileRoute("/submit")({
@@ -43,7 +43,8 @@ function SubmitPage() {
   const submit = useMutation({
     mutationFn: () => send({ data: { name, type, priority, input: preset.ai ? input : undefined } }),
     onSuccess: (r) => {
-      toast.success(`Request sent (${r.estimated.toFixed(2)} credits). Waiting for admin approval.`);
+      if (r.auto) toast.success(`Small job ran automatically (${r.estimated.toFixed(2)} credits) — ${r.status.toLowerCase()}.`);
+      else toast.success(`Request sent (${r.estimated.toFixed(2)} credits). Waiting for admin approval.`);
       setInput("");
       qc.invalidateQueries({ queryKey: ["job-requests"] });
     },
@@ -87,14 +88,14 @@ function SubmitPage() {
               </Field>
               <div className="flex items-end">
                 <Button type="submit" className="w-full" disabled={submit.isPending}>
-                  {submit.isPending ? "Sending…" : "Submit for approval"}
+                  {submit.isPending ? "Running…" : isAutoApproved(type, priority) ? "Run job" : "Submit for approval"}
                 </Button>
               </div>
               {preset.ai && (
                 <div className="space-y-2 sm:col-span-2">
                   <Label>{preset.ai.inputLabel}</Label>
-                  <Input type="file" accept=".txt,.md,.csv,.json,.js,.ts,.py,.java,.cpp,.c,.go,.html,.css" onChange={(e) => onFile(e.target.files?.[0])} />
-                  <Textarea rows={8} value={input} onChange={(e) => setInput(e.target.value)} placeholder="Paste text or upload a file" maxLength={40000} />
+                  {!preset.ai.image && <Input type="file" accept=".txt,.md,.csv,.json,.js,.ts,.py,.java,.cpp,.c,.go,.html,.css" onChange={(e) => onFile(e.target.files?.[0])} />}
+                  <Textarea rows={8} value={input} onChange={(e) => setInput(e.target.value)} placeholder={preset.ai.image ? "e.g. A futuristic data center at sunset, isometric style" : "Type, paste text or upload a file"} maxLength={40000} />
                 </div>
               )}
               <div className="rounded-md border border-border bg-muted/30 p-3 text-sm sm:col-span-2">
@@ -102,6 +103,9 @@ function SubmitPage() {
                 <p className="mt-2">
                   System allocation: <b>{plan.requestedCores} cores</b> · <b>{plan.requestedMemoryMb} MB</b> · about{" "}
                   <b>{(plan.estimatedMs / 1000).toFixed(0)} s</b> · est. <b>{estimateCredits(type, priority).toFixed(2)} credits</b>
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {isAutoApproved(type, priority) ? "Small job — runs immediately, no admin approval needed." : "Larger job — an admin must approve it before it runs."}
                 </p>
               </div>
             </form>

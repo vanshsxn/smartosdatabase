@@ -94,7 +94,9 @@ export function JobRequestList({ admin = false }: { admin?: boolean }) {
             )}
             {r.reason && <p className="mt-1 text-xs text-destructive">{r.reason}</p>}
             {job && <LiveJob job={job} />}
-            {r.output && (
+            {r.output?.startsWith("data:image") ? (
+              <img src={r.output} alt={r.name} className="mt-2 max-h-96 rounded border border-border" />
+            ) : r.output && (
               <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-xs">{r.output}</pre>
             )}
           </div>
