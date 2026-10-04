@@ -1,15 +1,23 @@
-// Server-only env shim: in the deployed worker runtime, server-side
-// SUPABASE_* vars may not be populated, while the VITE_* build-time values
-// are always inlined. Backfill process.env so generated Supabase clients
-// and auth middleware can read them.
-const url = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
-const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string | undefined;
-const projectId = import.meta.env["VITE_SUPABASE_PROJECT_ID"] as string | undefined;
+// Server-only environment shim for Cloudflare / Nitro.
+// Uses VITE_* values when available and falls back to
+// Cloudflare/runtime environment variables.
+
+const viteUrl = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
+const viteKey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string | undefined;
+const viteProjectId = import.meta.env["VITE_SUPABASE_PROJECT_ID"] as string | undefined;
 
 if (typeof process !== "undefined" && process.env) {
-  if (url && !process.env["SUPABASE_URL"]) process.env["SUPABASE_URL"] = url;
-  if (key && !process.env["SUPABASE_PUBLISHABLE_KEY"]) process.env["SUPABASE_PUBLISHABLE_KEY"] = key;
-  if (projectId && !process.env["SUPABASE_PROJECT_ID"]) process.env["SUPABASE_PROJECT_ID"] = projectId;
+  if (!process.env["SUPABASE_URL"] && viteUrl) {
+    process.env["SUPABASE_URL"] = viteUrl;
+  }
+
+  if (!process.env["SUPABASE_PUBLISHABLE_KEY"] && viteKey) {
+    process.env["SUPABASE_PUBLISHABLE_KEY"] = viteKey;
+  }
+
+  if (!process.env["SUPABASE_PROJECT_ID"] && viteProjectId) {
+    process.env["SUPABASE_PROJECT_ID"] = viteProjectId;
+  }
 }
 
 export {};
