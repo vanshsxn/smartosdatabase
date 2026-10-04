@@ -10,7 +10,10 @@ async function admin() {
   return supabaseAdmin;
 }
 
+const UNLIMITED_TENANT = "tenant-admin";
+
 async function balanceOf(tenantId: string): Promise<number> {
+  if (tenantId === UNLIMITED_TENANT) return Number.POSITIVE_INFINITY;
   const db = await admin();
   const { data } = await db.from("tenant_credits").select("balance").eq("tenant_id", tenantId).maybeSingle();
   if (data) return Number(data.balance);
