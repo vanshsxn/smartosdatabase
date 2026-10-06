@@ -37,12 +37,12 @@ export const explainBilling = createServerFn({ method: "POST" })
     });
     if (isAdmin !== true) throw new Error("Only admins can run billing explanations.");
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = context.supabase;
     const [{ data: reqs }, { data: credit }] = await Promise.all([
-      supabaseAdmin.from("job_requests")
+      db.from("job_requests")
         .select("id, name, type, priority, status, cores, memory_mb, estimated_ms, estimated_credits, engine_job_id, reason, created_at, decided_at")
         .eq("tenant_id", data.tenantId).order("created_at", { ascending: false }).limit(150),
-      supabaseAdmin.from("tenant_credits").select("balance, updated_at").eq("tenant_id", data.tenantId).maybeSingle(),
+      db.from("tenant_credits").select("balance, updated_at").eq("tenant_id", data.tenantId).maybeSingle(),
     ]);
     const history = reqs ?? [];
     if (!history.length && !data.jobs.length)
