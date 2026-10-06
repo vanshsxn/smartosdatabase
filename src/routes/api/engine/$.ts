@@ -55,7 +55,7 @@ async function guarded(request: Request, splat: string) {
   // Credits live in the database ledger (charged on admin approval).
   if (path === "tenants" && method === "GET") {
     const { data } = await caller.db.from("tenant_credits").select("tenant_id, balance");
-    const all = (data ?? []).map((r) => ({ tenantId: r.tenant_id, credits: Number(r.balance) }));
+    const all = ((data ?? []) as Array<{ tenant_id: string; balance: number }>).map((r) => ({ tenantId: r.tenant_id, credits: Number(r.balance) }));
     const list = caller.isAdmin ? all : all.filter((t) => t.tenantId === caller.tenantId);
     if (!caller.isAdmin && !list.length) list.push({ tenantId: caller.tenantId, credits: 100 });
     return Response.json({ tenants: list }, { headers: { "cache-control": "no-store" } });
