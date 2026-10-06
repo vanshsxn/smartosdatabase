@@ -54,9 +54,8 @@ async function guarded(request: Request, splat: string) {
 
   // Credits live in the database ledger (charged on admin approval).
   if (path === "tenants" && method === "GET") {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data } = await supabaseAdmin.from("tenant_credits").select("tenant_id, balance");
-    const all = (data ?? []).map((r) => ({ tenantId: r.tenant_id, credits: Number(r.balance) }));
+    const { data } = await caller.db.from("tenant_credits").select("tenant_id, balance");
+    const all = ((data ?? []) as Array<{ tenant_id: string; balance: number }>).map((r) => ({ tenantId: r.tenant_id, credits: Number(r.balance) }));
     const list = caller.isAdmin ? all : all.filter((t) => t.tenantId === caller.tenantId);
     if (!caller.isAdmin && !list.length) list.push({ tenantId: caller.tenantId, credits: 100 });
     return Response.json({ tenants: list }, { headers: { "cache-control": "no-store" } });
@@ -64,8 +63,7 @@ async function guarded(request: Request, splat: string) {
   if (path === "tenants/credits" && method === "POST" && caller.isAdmin) {
     const body = (await request.json().catch(() => ({}))) as { tenantId?: string; credits?: number };
     if (!body.tenantId || typeof body.credits !== "number" || body.credits < 0) return deny(400, "Invalid credits");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("tenant_credits").upsert({ tenant_id: body.tenantId, balance: body.credits });
+    await caller.db.from("tenant_credits").upsert({ tenant_id: body.tenantId, balance: body.credits });
     return Response.json({ tenantId: body.tenantId, credits: body.credits });
   }
 

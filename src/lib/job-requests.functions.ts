@@ -5,16 +5,11 @@ import { JOB_PRESETS, estimateCredits, isAutoApproved, resourcesFor } from "./jo
 
 const DEFAULT_CREDITS = 100;
 
-async function admin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
-}
-
 const UNLIMITED_TENANT = "tenant-admin";
 
-async function balanceOf(tenantId: string): Promise<number> {
+// deno-lint-ignore no-explicit-any
+async function balanceOf(db: any, tenantId: string): Promise<number> {
   if (tenantId === UNLIMITED_TENANT) return Number.POSITIVE_INFINITY;
-  const db = await admin();
   const { data } = await db.from("tenant_credits").select("balance").eq("tenant_id", tenantId).maybeSingle();
   if (data) return Number(data.balance);
   await db.from("tenant_credits").insert({ tenant_id: tenantId, balance: DEFAULT_CREDITS });
@@ -52,11 +47,11 @@ export const requestJob = createServerFn({ method: "POST" })
     const tenantId = profile?.tenant_id ?? `tenant-${context.userId.replace(/-/g, "").slice(0, 10)}`;
     const plan = resourcesFor(data.type, data.priority);
     const est = Math.round(estimateCredits(data.type, data.priority) * 100) / 100;
-    const balance = await balanceOf(tenantId);
+    const db = context.supabase;
+    const balance = await balanceOf(db, tenantId);
     if (balance < est)
       throw new Error(`Insufficient credits: you have ${balance.toFixed(2)} but this job needs ${est.toFixed(2)}. Ask the admin for more credits.`);
 
-    const db = await admin();
     const { data: row, error } = await db
       .from("job_requests")
       .insert({
@@ -76,7 +71,7 @@ export const requestJob = createServerFn({ method: "POST" })
     }
     if (isAutoApproved(data.type, data.priority)) {
       const { data: req } = await db.from("job_requests").select("*").eq("id", row.id).single();
-      const r = await executeRequest(req, "Auto-approved (small job)");
+      const r = await executeRequest(db, req, "Auto-approved (small job)");
       return { id: row.id as string, estimated: est, auto: true, status: r.status };
     }
     return { id: row.id as string, estimated: est, auto: false, status: "PENDING" };
@@ -90,7 +85,7 @@ export const decideJob = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const db = await admin();
+    const db = context.supabase;
     const { data: req } = await db.from("job_requests").select("*").eq("id", data.id).maybeSingle();
     if (!req) throw new Error("Request not found");
     if (req.status !== "PENDING") throw new Error(`Already ${req.status.toLowerCase()}`);
@@ -102,16 +97,15 @@ export const decideJob = createServerFn({ method: "POST" })
       return { status: "DENIED" };
     }
 
-    return executeRequest(req);
+    return executeRequest(db, req);
   });
 
 
 // deno-lint-ignore no-explicit-any
-async function executeRequest(req: any, note?: string): Promise<{ status: string; reason?: string; engineJobId?: number | null }> {
-  const db = await admin();
+async function executeRequest(db: any, req: any, note?: string): Promise<{ status: string; reason?: string; engineJobId?: number | null }> {
   const now = new Date().toISOString();
     const est = Number(req.estimated_credits);
-    const balance = await balanceOf(req.tenant_id);
+    const balance = await balanceOf(db, req.tenant_id);
     if (balance < est) {
       await db.from("job_requests").update({ status: "DENIED", reason: `Insufficient credits (${balance.toFixed(2)} < ${est.toFixed(2)})`, decided_at: now }).eq("id", req.id);
       return { status: "DENIED" };
@@ -160,7 +154,7 @@ async function executeRequest(req: any, note?: string): Promise<{ status: string
         return { status: "COMPLETED" };
       } catch (e) {
         const msg = e instanceof Error ? e.message : "AI failed";
-        const cur = await balanceOf(req.tenant_id);
+        const cur = await balanceOf(db, req.tenant_id);
         await db.from("tenant_credits").update({ balance: cur + est, updated_at: new Date().toISOString() }).eq("tenant_id", req.tenant_id);
         await db.from("job_requests").update({ status: "FAILED", reason: `${msg} (credits refunded)` }).eq("id", req.id);
         return { status: "FAILED", reason: msg };
@@ -175,8 +169,7 @@ export const setTenantBalance = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ tenantId: z.string().max(60), balance: z.number().min(0).max(1e7) }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const db = await admin();
-    const { error } = await db.from("tenant_credits").upsert({ tenant_id: data.tenantId, balance: data.balance, updated_at: new Date().toISOString() });
+    const { error } = await context.supabase.from("tenant_credits").upsert({ tenant_id: data.tenantId, balance: data.balance, updated_at: new Date().toISOString() });
     if (error) throw new Error(error.message);
     return data;
   });

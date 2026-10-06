@@ -6,6 +6,9 @@ export interface Caller {
   email: string;
   tenantId: string;
   isAdmin: boolean;
+  /** Database connection signed in as this caller (RLS applies). */
+  // deno-lint-ignore no-explicit-any
+  db: any;
 }
 
 /**
@@ -41,5 +44,6 @@ export async function resolveCaller(request: Request): Promise<Caller | null> {
     email: userData.user.email ?? "",
     tenantId: profile?.tenant_id ?? `tenant-${uid.replace(/-/g, "").slice(0, 10)}`,
     isAdmin: admin === true,
+    db: supabase,
   };
 }
