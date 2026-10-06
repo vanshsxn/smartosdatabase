@@ -22,6 +22,13 @@
       "when": 1790525678714,
       "tag": "0002_credits_and_job_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791266096178,
+      "tag": "0003_user_write_policies_for_credits_and_jobs",
+      "breakpoints": true
     }
   ]
 }
