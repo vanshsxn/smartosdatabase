@@ -5,16 +5,11 @@ import { JOB_PRESETS, estimateCredits, isAutoApproved, resourcesFor } from "./jo
 
 const DEFAULT_CREDITS = 100;
 
-async function admin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
-}
-
 const UNLIMITED_TENANT = "tenant-admin";
 
-async function balanceOf(tenantId: string): Promise<number> {
+// deno-lint-ignore no-explicit-any
+async function balanceOf(db: any, tenantId: string): Promise<number> {
   if (tenantId === UNLIMITED_TENANT) return Number.POSITIVE_INFINITY;
-  const db = await admin();
   const { data } = await db.from("tenant_credits").select("balance").eq("tenant_id", tenantId).maybeSingle();
   if (data) return Number(data.balance);
   await db.from("tenant_credits").insert({ tenant_id: tenantId, balance: DEFAULT_CREDITS });
