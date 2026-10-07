@@ -180,9 +180,23 @@ export const setTenantBalance = createServerFn({ method: "POST" })
     return data;
   });
 
-async function runAi(instructions: string, input: string): Promise<string> {
+async function relayAi(body: { kind: "text" | "image"; instructions?: string; input: string }): Promise<string> {
+  const { getRequest } = await import("@tanstack/react-start/server");
+  const auth = getRequest()?.headers.get("authorization") ?? "";
+  const base = (process.env["AI_RELAY_URL"] || "https://smarttaskrunner.lovable.app").replace(/\/$/, "");
+  const res = await fetch(`${base}/api/ai-relay`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: auth },
+    body: JSON.stringify(body),
+  });
+  const j = (await res.json().catch(() => ({}))) as { output?: string; error?: string };
+  if (!res.ok || !j.output) throw new Error(j.error || `AI request failed (${res.status})`);
+  return j.output;
+}
+
+export async function runAi(instructions: string, input: string): Promise<string> {
   const key = process.env["LOVABLE_API_KEY"];
-  if (!key) throw new Error("AI is not configured");
+  if (!key) return relayAi({ kind: "text", instructions, input });
   const res = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
     method: "POST",
     headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "fetch", "Content-Type": "application/json" },
@@ -218,9 +232,9 @@ async function runAi(instructions: string, input: string): Promise<string> {
   return text.trim() || "The model returned no output.";
 }
 
-async function runImage(prompt: string): Promise<string> {
+export async function runImage(prompt: string): Promise<string> {
   const key = process.env["LOVABLE_API_KEY"];
-  if (!key) throw new Error("AI is not configured");
+  if (!key) return relayAi({ kind: "image", input: prompt });
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "fetch", "Content-Type": "application/json" },
