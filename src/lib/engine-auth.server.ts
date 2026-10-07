@@ -47,3 +47,12 @@ export async function resolveCaller(request: Request): Promise<Caller | null> {
     db: supabase,
   };
 }
+
+/** Database client for the current server-function request, always on the same project as the browser. */
+export async function userDbFromRequest() {
+  const { getRequest } = await import("@tanstack/react-start/server");
+  const req = getRequest();
+  const caller = req ? await resolveCaller(req) : null;
+  if (!caller) throw new Error("Please sign in again.");
+  return caller;
+}
