@@ -22,6 +22,7 @@ import { Route as SchedulerRouteImport } from './routes/scheduler'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SubmitRouteImport } from './routes/submit'
 import { Route as TenantsRouteImport } from './routes/tenants'
+import { Route as ApiAiRelayRouteImport } from './routes/api/ai-relay'
 import { Route as ApiEngineSplatRouteImport } from './routes/api/engine/$'
 import { Route as ApiEngineStreamRouteImport } from './routes/api/engine/stream'
 
@@ -90,6 +91,11 @@ const TenantsRoute = TenantsRouteImport.update({
   path: '/tenants',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAiRelayRoute = ApiAiRelayRouteImport.update({
+  id: '/api/ai-relay',
+  path: '/api/ai-relay',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiEngineSplatRoute = ApiEngineSplatRouteImport.update({
   id: '/api/engine/$',
   path: '/api/engine/$',
@@ -115,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/submit': typeof SubmitRoute
   '/tenants': typeof TenantsRoute
+  '/api/ai-relay': typeof ApiAiRelayRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
   '/api/engine/stream': typeof ApiEngineStreamRoute
 }
@@ -132,6 +139,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/submit': typeof SubmitRoute
   '/tenants': typeof TenantsRoute
+  '/api/ai-relay': typeof ApiAiRelayRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
   '/api/engine/stream': typeof ApiEngineStreamRoute
 }
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/submit': typeof SubmitRoute
   '/tenants': typeof TenantsRoute
+  '/api/ai-relay': typeof ApiAiRelayRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
   '/api/engine/stream': typeof ApiEngineStreamRoute
 }
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/submit'
     | '/tenants'
+    | '/api/ai-relay'
     | '/api/engine/$'
     | '/api/engine/stream'
   fileRoutesByTo: FileRoutesByTo
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/submit'
     | '/tenants'
+    | '/api/ai-relay'
     | '/api/engine/$'
     | '/api/engine/stream'
   id:
@@ -203,6 +214,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/submit'
     | '/tenants'
+    | '/api/ai-relay'
     | '/api/engine/$'
     | '/api/engine/stream'
   fileRoutesById: FileRoutesById
@@ -221,6 +233,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SubmitRoute: typeof SubmitRoute
   TenantsRoute: typeof TenantsRoute
+  ApiAiRelayRoute: typeof ApiAiRelayRoute
   ApiEngineSplatRoute: typeof ApiEngineSplatRoute
   ApiEngineStreamRoute: typeof ApiEngineStreamRoute
 }
@@ -318,6 +331,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TenantsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/ai-relay': {
+      id: '/api/ai-relay'
+      path: '/api/ai-relay'
+      fullPath: '/api/ai-relay'
+      preLoaderRoute: typeof ApiAiRelayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/engine/$': {
       id: '/api/engine/$'
       path: '/api/engine/$'
@@ -349,6 +369,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SubmitRoute: SubmitRoute,
   TenantsRoute: TenantsRoute,
+  ApiAiRelayRoute: ApiAiRelayRoute,
   ApiEngineSplatRoute: ApiEngineSplatRoute,
   ApiEngineStreamRoute: ApiEngineStreamRoute,
 }
