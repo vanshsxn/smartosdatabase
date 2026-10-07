@@ -39,7 +39,12 @@ import {
   fmtTime,
 } from "@/components/dashboard-bits";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -58,8 +63,8 @@ import {
   resourcesQuery,
   tenantCreditsQuery,
 } from "@/lib/engine-queries";
-import { tenantName, useSession } from "@/lib/session";
 import { useEngineStream } from "@/lib/engine-stream";
+import { tenantName, useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -70,7 +75,10 @@ export const Route = createFileRoute("/")({
         content:
           "Live scheduler dashboard: CPU and memory charts, job status, queues, tenants and throughput.",
       },
-      { property: "og:title", content: "Dashboard | Smart Cloud Task Engine" },
+      {
+        property: "og:title",
+        content: "Dashboard | Smart Cloud Task Engine",
+      },
       {
         property: "og:description",
         content:
@@ -86,6 +94,7 @@ export const Route = createFileRoute("/")({
 function DashboardPage() {
   const { tenantId } = useSession();
   const qc = useQueryClient();
+
   const health = useQuery(healthQuery);
   const metrics = useQuery(metricsQuery);
   const resources = useQuery(resourcesQuery);
@@ -94,7 +103,6 @@ function DashboardPage() {
   const jobs = useQuery(jobsQuery(tenantId));
   const credits = useQuery(tenantCreditsQuery);
 
-  // Continuous updates come from the SSE stream (1 Hz), not from polling.
   const { history, snapshot } = useEngineStream();
 
   const pause = useMutation({
@@ -108,21 +116,40 @@ function DashboardPage() {
 
   const m = snapshot?.metrics ?? metrics.data;
   const r = snapshot?.resources ?? resources.data;
+
   const streamJobs = snapshot?.jobs;
+
   const jobList =
     streamJobs && streamJobs.length
       ? tenantId
         ? streamJobs.filter((j) => j.tenantId === tenantId)
         : streamJobs
-      : (jobs.data ?? []);
+      : jobs.data ?? [];
+
   const total = jobList.length;
 
   const statusData = m
     ? [
-        { name: "Running", value: m.running, color: "var(--color-success)" },
-        { name: "Completed", value: m.completed, color: "var(--color-primary)" },
-        { name: "Waiting", value: m.queued, color: "var(--color-warning)" },
-        { name: "Rejected", value: m.failed + m.cancelled, color: "var(--color-destructive)" },
+        {
+          name: "Running",
+          value: m.running,
+          color: "var(--color-success)",
+        },
+        {
+          name: "Completed",
+          value: m.completed,
+          color: "var(--color-primary)",
+        },
+        {
+          name: "Waiting",
+          value: m.queued,
+          color: "var(--color-warning)",
+        },
+        {
+          name: "Rejected",
+          value: m.failed + m.cancelled,
+          color: "var(--color-destructive)",
+        },
       ].filter((d) => d.value > 0)
     : [];
 
@@ -131,19 +158,33 @@ function DashboardPage() {
     .slice(0, 8)
     .map((j) => ({
       name: `#${j.id}`,
-      cpu: r ? (j.requestedCores / Math.max(1, r.totalCores)) * 100 : 0,
-      memory: r ? (j.requestedMemoryMb / Math.max(1, r.totalMemoryMb)) * 100 : 0,
+      cpu: r
+        ? (j.requestedCores / Math.max(1, r.totalCores)) * 100
+        : 0,
+      memory: r
+        ? (j.requestedMemoryMb / Math.max(1, r.totalMemoryMb)) * 100
+        : 0,
     }));
 
-  const creditMap = new Map((credits.data ?? []).map((c) => [c.tenantId, c.credits]));
+  const creditMap = new Map(
+    (credits.data ?? []).map((c) => [c.tenantId, c.credits]),
+  );
+
   const usedByTenant = new Map<string, number>();
+
   for (const j of jobList) {
-    usedByTenant.set(j.tenantId, (usedByTenant.get(j.tenantId) ?? 0) + (j.creditsCharged || 0));
+    usedByTenant.set(
+      j.tenantId,
+      (usedByTenant.get(j.tenantId) ?? 0) +
+        (j.creditsCharged || 0),
+    );
   }
 
   return (
     <AppLayout title="Dashboard">
-      {health.isError || health.data?.reachable === false ? <EngineOffline /> : null}
+      {health.isError || health.data?.reachable === false ? (
+        <EngineOffline />
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
@@ -152,6 +193,7 @@ function DashboardPage() {
           sub={`${m?.queued ?? 0} in queue`}
           icon={<FileText className="h-5 w-5" />}
         />
+
         <StatCard
           label="Running Jobs"
           value={m?.running ?? 0}
@@ -159,6 +201,7 @@ function DashboardPage() {
           tone="success"
           icon={<Play className="h-5 w-5" />}
         />
+
         <StatCard
           label="Completed Jobs"
           value={m?.completed ?? 0}
@@ -166,6 +209,7 @@ function DashboardPage() {
           tone="info"
           icon={<CheckCircle2 className="h-5 w-5" />}
         />
+
         <StatCard
           label="Rejected Jobs"
           value={(m?.failed ?? 0) + (m?.cancelled ?? 0)}
@@ -173,6 +217,7 @@ function DashboardPage() {
           tone="destructive"
           icon={<XCircle className="h-5 w-5" />}
         />
+
         <StatCard
           label="System Load"
           value={`${(r?.cpuUtilization ?? 0).toFixed(0)}%`}
@@ -185,8 +230,11 @@ function DashboardPage() {
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-1">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">System Resource Usage</CardTitle>
+            <CardTitle className="text-base">
+              System Resource Usage
+            </CardTitle>
           </CardHeader>
+
           <CardContent className="flex flex-wrap justify-around gap-4">
             <Gauge
               value={r?.cpuUtilization ?? 0}
@@ -194,12 +242,18 @@ function DashboardPage() {
               detail={`${r?.usedCores ?? 0} / ${r?.totalCores ?? 0} Cores`}
               color="var(--color-chart-1)"
             />
+
             <Gauge
               value={r?.memoryUtilization ?? 0}
               label="RAM Usage"
-              detail={`${(((r?.usedMemoryMb ?? 0) / 1024)).toFixed(1)} / ${(((r?.totalMemoryMb ?? 0) / 1024)).toFixed(0)} GB`}
+              detail={`${(
+                (r?.usedMemoryMb ?? 0) / 1024
+              ).toFixed(1)} / ${(
+                (r?.totalMemoryMb ?? 0) / 1024
+              ).toFixed(0)} GB`}
               color="var(--color-chart-2)"
             />
+
             <Gauge
               value={memory.data?.utilization ?? 0}
               label="Memory Pool"
@@ -211,7 +265,10 @@ function DashboardPage() {
 
         <Card>
           <CardHeader className="flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base">Scheduler Summary</CardTitle>
+            <CardTitle className="text-base">
+              Scheduler Summary
+            </CardTitle>
+
             <Button
               size="sm"
               variant={health.data?.paused ? "default" : "outline"}
@@ -220,17 +277,24 @@ function DashboardPage() {
             >
               {health.data?.paused ? (
                 <>
-                  <Play className="mr-1.5 h-3.5 w-3.5" /> Resume
+                  <Play className="mr-1.5 h-3.5 w-3.5" />
+                  Resume
                 </>
               ) : (
                 <>
-                  <Pause className="mr-1.5 h-3.5 w-3.5" /> Pause
+                  <Pause className="mr-1.5 h-3.5 w-3.5" />
+                  Pause
                 </>
               )}
             </Button>
           </CardHeader>
+
           <CardContent className="space-y-2.5 text-sm">
-            <Row label="Scheduler Type" value={m?.policy ?? "—"} />
+            <Row
+              label="Scheduler Type"
+              value={m?.policy ?? "—"}
+            />
+
             <Row
               label="Algorithm"
               value={
@@ -239,22 +303,54 @@ function DashboardPage() {
                   : "Multi-Level Feedback Queue"
               }
             />
-            <Row label="Context Switches" value={String(m?.contextSwitches ?? 0)} />
-            <Row label="Preemptions" value={String(m?.preemptions ?? 0)} />
-            <Row label="Avg. Waiting Time" value={fmtMs(m?.avgWaitingMs ?? 0)} />
-            <Row label="Avg. Turnaround" value={fmtMs(m?.avgTurnaroundMs ?? 0)} />
-            <Row label="Throughput" value={`${(m?.throughputPerMin ?? 0).toFixed(1)} jobs/min`} />
-            <Row label="Queue Levels" value={String(queues.data?.levels.length ?? 0)} />
+
+            <Row
+              label="Context Switches"
+              value={String(m?.contextSwitches ?? 0)}
+            />
+
+            <Row
+              label="Preemptions"
+              value={String(m?.preemptions ?? 0)}
+            />
+
+            <Row
+              label="Avg. Waiting Time"
+              value={fmtMs(m?.avgWaitingMs ?? 0)}
+            />
+
+            <Row
+              label="Avg. Turnaround"
+              value={fmtMs(m?.avgTurnaroundMs ?? 0)}
+            />
+
+            <Row
+              label="Throughput"
+              value={`${(
+                m?.throughputPerMin ?? 0
+              ).toFixed(1)} jobs/min`}
+            />
+
+            <Row
+              label="Queue Levels"
+              value={String(queues.data?.levels.length ?? 0)}
+            />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Job Status Distribution</CardTitle>
+            <CardTitle className="text-base">
+              Job Status Distribution
+            </CardTitle>
           </CardHeader>
+
           <CardContent className="h-[240px]">
             {statusData.length ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
                 <PieChart>
                   <Pie
                     data={statusData}
@@ -265,15 +361,27 @@ function DashboardPage() {
                     paddingAngle={2}
                   >
                     {statusData.map((d) => (
-                      <Cell key={d.name} fill={d.color} stroke="transparent" />
+                      <Cell
+                        key={d.name}
+                        fill={d.color}
+                        stroke="transparent"
+                      />
                     ))}
                   </Pie>
-                  <Legend verticalAlign="middle" align="right" layout="vertical" />
+
+                  <Legend
+                    verticalAlign="middle"
+                    align="right"
+                    layout="vertical"
+                  />
+
                   <Tooltip contentStyle={tooltipStyle} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <p className="pt-16 text-center text-sm text-muted-foreground">No jobs yet</p>
+              <p className="pt-16 text-center text-sm text-muted-foreground">
+                No jobs yet
+              </p>
             )}
           </CardContent>
         </Card>
@@ -283,17 +391,49 @@ function DashboardPage() {
         <Card className="xl:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
-              CPU &amp; RAM Usage <span className="text-muted-foreground">(live)</span>
+              CPU &amp; RAM Usage{" "}
+              <span className="text-muted-foreground">
+                (live)
+              </span>
             </CardTitle>
           </CardHeader>
+
           <CardContent className="h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={history}>
-                <CartesianGrid stroke="var(--color-border)" vertical={false} />
-                <XAxis dataKey="label" tick={axisTick} minTickGap={30} />
-                <YAxis domain={[0, 100]} unit="%" tick={axisTick} width={44} />
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <LineChart
+                data={history}
+                margin={{
+                  top: 5,
+                  right: 10,
+                  left: 0,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid
+                  stroke="var(--color-border)"
+                  vertical={false}
+                />
+
+                <XAxis
+                  dataKey="label"
+                  tick={axisTick}
+                  minTickGap={30}
+                />
+
+                <YAxis
+                  domain={[0, 100]}
+                  unit="%"
+                  tick={axisTick}
+                  width={44}
+                />
+
                 <Tooltip contentStyle={tooltipStyle} />
+
                 <Legend />
+
                 <Line
                   type="monotone"
                   dataKey="cpu"
@@ -303,6 +443,7 @@ function DashboardPage() {
                   strokeWidth={2}
                   isAnimationActive={false}
                 />
+
                 <Line
                   type="monotone"
                   dataKey="memory"
@@ -319,27 +460,71 @@ function DashboardPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Job Throughput</CardTitle>
+            <CardTitle className="text-base">
+              Job Throughput
+            </CardTitle>
           </CardHeader>
+
           <CardContent className="h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={history}>
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <AreaChart
+                data={history}
+                margin={{
+                  top: 5,
+                  right: 10,
+                  left: 0,
+                  bottom: 5,
+                }}
+              >
                 <defs>
-                  <linearGradient id="tp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--color-chart-3)" stopOpacity={0.6} />
-                    <stop offset="100%" stopColor="var(--color-chart-3)" stopOpacity={0} />
+                  <linearGradient
+                    id="throughputGradient"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop
+                      offset="0%"
+                      stopColor="var(--color-chart-3)"
+                      stopOpacity={0.6}
+                    />
+
+                    <stop
+                      offset="100%"
+                      stopColor="var(--color-chart-3)"
+                      stopOpacity={0}
+                    />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="var(--color-border)" vertical={false} />
-                <XAxis dataKey="label" tick={axisTick} minTickGap={30} />
-                <YAxis tick={axisTick} width={36} />
+
+                <CartesianGrid
+                  stroke="var(--color-border)"
+                  vertical={false}
+                />
+
+                <XAxis
+                  dataKey="label"
+                  tick={axisTick}
+                  minTickGap={30}
+                />
+
+                <YAxis
+                  tick={axisTick}
+                  width={36}
+                />
+
                 <Tooltip contentStyle={tooltipStyle} />
+
                 <Area
                   type="monotone"
                   dataKey="throughput"
                   name="Jobs/min"
                   stroke="var(--color-chart-3)"
-                  fill="url(#tp)"
+                  fill="url(#throughputGradient)"
                   strokeWidth={2}
                   isAnimationActive={false}
                 />
@@ -351,23 +536,57 @@ function DashboardPage() {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Per-Job Resource Share (active jobs)</CardTitle>
+          <CardTitle className="text-base">
+            Per-Job Resource Share (active jobs)
+          </CardTitle>
         </CardHeader>
+
         <CardContent className="h-[220px]">
           {perJob.length ? (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
               <BarChart data={perJob}>
-                <CartesianGrid stroke="var(--color-border)" vertical={false} />
-                <XAxis dataKey="name" tick={axisTick} />
-                <YAxis unit="%" tick={axisTick} width={44} />
+                <CartesianGrid
+                  stroke="var(--color-border)"
+                  vertical={false}
+                />
+
+                <XAxis
+                  dataKey="name"
+                  tick={axisTick}
+                />
+
+                <YAxis
+                  unit="%"
+                  tick={axisTick}
+                  width={44}
+                />
+
                 <Tooltip contentStyle={tooltipStyle} />
+
                 <Legend />
-                <Bar dataKey="cpu" name="CPU share (%)" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="memory" name="RAM share (%)" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
+
+                <Bar
+                  dataKey="cpu"
+                  name="CPU share (%)"
+                  fill="var(--color-chart-1)"
+                  radius={[4, 4, 0, 0]}
+                />
+
+                <Bar
+                  dataKey="memory"
+                  name="RAM share (%)"
+                  fill="var(--color-chart-2)"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="pt-16 text-center text-sm text-muted-foreground">No active jobs</p>
+            <p className="pt-16 text-center text-sm text-muted-foreground">
+              No active jobs
+            </p>
           )}
         </CardContent>
       </Card>
@@ -375,8 +594,11 @@ function DashboardPage() {
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Recent Jobs</CardTitle>
+            <CardTitle className="text-base">
+              Recent Jobs
+            </CardTitle>
           </CardHeader>
+
           <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -391,34 +613,60 @@ function DashboardPage() {
                   <TableHead>Submitted</TableHead>
                 </TableRow>
               </TableHeader>
+
               <TableBody>
                 {jobList.slice(0, 6).map((j) => (
                   <TableRow key={j.id}>
-                    <TableCell className="tabular-nums">{j.id}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {j.id}
+                    </TableCell>
+
                     <TableCell>{j.name}</TableCell>
-                    <TableCell>{tenantName(j.tenantId)}</TableCell>
+
+                    <TableCell>
+                      {tenantName(j.tenantId)}
+                    </TableCell>
+
                     <TableCell>
                       <PriorityText priority={j.priority} />
                     </TableCell>
+
                     <TableCell>
                       <StatusText status={j.status} />
                     </TableCell>
-                    <TableCell>{j.requestedCores} core</TableCell>
-                    <TableCell>{j.requestedMemoryMb} MB</TableCell>
-                    <TableCell>{fmtTime(j.submittedAtMs)}</TableCell>
+
+                    <TableCell>
+                      {j.requestedCores} core
+                    </TableCell>
+
+                    <TableCell>
+                      {j.requestedMemoryMb} MB
+                    </TableCell>
+
+                    <TableCell>
+                      {fmtTime(j.submittedAtMs)}
+                    </TableCell>
                   </TableRow>
                 ))}
+
                 {!jobList.length && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground">
+                    <TableCell
+                      colSpan={8}
+                      className="text-center text-muted-foreground"
+                    >
                       No jobs submitted yet
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
+
             <div className="pt-3 text-center">
-              <Link to="/jobs" className="text-sm text-primary hover:underline">
+              <Link
+                to="/jobs"
+                className="text-sm text-primary hover:underline"
+              >
                 View All Jobs →
               </Link>
             </div>
@@ -427,8 +675,11 @@ function DashboardPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Top Tenants</CardTitle>
+            <CardTitle className="text-base">
+              Top Tenants
+            </CardTitle>
           </CardHeader>
+
           <CardContent>
             <Table>
               <TableHeader>
@@ -436,27 +687,55 @@ function DashboardPage() {
                   <TableHead>Tenant</TableHead>
                   <TableHead>Used</TableHead>
                   <TableHead>Total</TableHead>
-                  <TableHead className="text-right">Remaining</TableHead>
+                  <TableHead className="text-right">
+                    Remaining
+                  </TableHead>
                 </TableRow>
               </TableHeader>
+
               <TableBody>
-                {[...creditMap.keys()].slice(0, 6).map((id) => {
-                  const remaining = Math.round(creditMap.get(id) ?? 0);
-                  const used = Math.round(usedByTenant.get(id) ?? 0);
-                  const totalCredits = remaining + used;
-                  return (
-                    <TableRow key={id}>
-                      <TableCell>{tenantName(id)}</TableCell>
-                      <TableCell className="tabular-nums">{used}</TableCell>
-                      <TableCell className="tabular-nums">{Math.round(totalCredits)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{remaining}</TableCell>
-                    </TableRow>
-                  );
-                })}
+                {[...creditMap.keys()]
+                  .slice(0, 6)
+                  .map((id) => {
+                    const remaining = Math.round(
+                      creditMap.get(id) ?? 0,
+                    );
+
+                    const used = Math.round(
+                      usedByTenant.get(id) ?? 0,
+                    );
+
+                    const totalCredits =
+                      remaining + used;
+
+                    return (
+                      <TableRow key={id}>
+                        <TableCell>
+                          {tenantName(id)}
+                        </TableCell>
+
+                        <TableCell className="tabular-nums">
+                          {used}
+                        </TableCell>
+
+                        <TableCell className="tabular-nums">
+                          {Math.round(totalCredits)}
+                        </TableCell>
+
+                        <TableCell className="text-right tabular-nums">
+                          {remaining}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
               </TableBody>
             </Table>
+
             <div className="pt-3 text-center">
-              <Link to="/tenants" className="text-sm text-primary hover:underline">
+              <Link
+                to="/tenants"
+                className="text-sm text-primary hover:underline"
+              >
                 View All Tenants →
               </Link>
             </div>
@@ -467,11 +746,22 @@ function DashboardPage() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium text-primary">{value}</span>
+      <span className="text-muted-foreground">
+        {label}
+      </span>
+
+      <span className="text-right font-medium text-primary">
+        {value}
+      </span>
     </div>
   );
 }
@@ -483,4 +773,7 @@ export const tooltipStyle = {
   color: "var(--color-popover-foreground)",
 } as const;
 
-export const axisTick = { fill: "var(--color-muted-foreground)", fontSize: 11 } as const;
+export const axisTick = {
+  fill: "var(--color-muted-foreground)",
+  fontSize: 11,
+} as const;
