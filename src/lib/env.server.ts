@@ -7,15 +7,15 @@ const viteKey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string | und
 const viteProjectId = import.meta.env["VITE_SUPABASE_PROJECT_ID"] as string | undefined;
 
 if (typeof process !== "undefined" && process.env) {
-  if (!process.env["SUPABASE_URL"] && viteUrl) {
+  if (viteUrl) {
     process.env["SUPABASE_URL"] = viteUrl;
   }
 
-  if (!process.env["SUPABASE_PUBLISHABLE_KEY"] && viteKey) {
+  if (viteKey) {
     process.env["SUPABASE_PUBLISHABLE_KEY"] = viteKey;
   }
 
-  if (!process.env["SUPABASE_PROJECT_ID"] && viteProjectId) {
+  if (viteProjectId) {
     process.env["SUPABASE_PROJECT_ID"] = viteProjectId;
   }
 }

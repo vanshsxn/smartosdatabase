@@ -16,8 +16,8 @@ export interface Caller {
  * caller's tenant and admin role from the database (RLS applies as the user).
  */
 export async function resolveCaller(request: Request): Promise<Caller | null> {
-  const url = process.env["SUPABASE_URL"];
-  const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
+  const url = (import.meta.env["VITE_SUPABASE_URL"] as string | undefined) || process.env["SUPABASE_URL"];
+  const key = (import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string | undefined) || process.env["SUPABASE_PUBLISHABLE_KEY"];
   if (!url || !key) return null;
 
   const header = request.headers.get("authorization") ?? "";
