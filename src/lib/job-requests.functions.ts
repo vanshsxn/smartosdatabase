@@ -39,15 +39,17 @@ export const requestJob = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    const _u = await (await import("@/lib/engine-auth.server")).userDbFromRequest();
+    const ctx = { supabase: _u.db, userId: _u.userId as string };
     const preset = JOB_PRESETS.find((p) => p.type === data.type);
     if (!preset) throw new Error("Unknown job type");
     if (preset.ai && !data.repo && !data.input?.trim()) throw new Error("Please enter a prompt or upload a file for this job.");
-    const { data: profile } = await context.supabase
-      .from("profiles").select("tenant_id, email").eq("id", context.userId).maybeSingle();
-    const tenantId = profile?.tenant_id ?? `tenant-${context.userId.replace(/-/g, "").slice(0, 10)}`;
+    const { data: profile } = await ctx.supabase
+      .from("profiles").select("tenant_id, email").eq("id", ctx.userId).maybeSingle();
+    const tenantId = profile?.tenant_id ?? `tenant-${ctx.userId.replace(/-/g, "").slice(0, 10)}`;
     const plan = resourcesFor(data.type, data.priority);
     const est = Math.round(estimateCredits(data.type, data.priority) * 100) / 100;
-    const db = context.supabase;
+    const db = ctx.supabase;
     const balance = await balanceOf(db, tenantId);
     if (balance < est)
       throw new Error(`Insufficient credits: you have ${balance.toFixed(2)} but this job needs ${est.toFixed(2)}. Ask the admin for more credits.`);
@@ -55,7 +57,7 @@ export const requestJob = createServerFn({ method: "POST" })
     const { data: row, error } = await db
       .from("job_requests")
       .insert({
-        user_id: context.userId, tenant_id: tenantId, email: profile?.email ?? null,
+        user_id: ctx.userId, tenant_id: tenantId, email: profile?.email ?? null,
         name: data.name, type: data.type, priority: data.priority,
         cores: plan.requestedCores, memory_mb: plan.requestedMemoryMb, estimated_ms: plan.estimatedMs,
         estimated_credits: est, input: data.input ?? null,
@@ -64,7 +66,7 @@ export const requestJob = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (data.repo) {
       await db.from("github_deployments").insert({
-        user_id: context.userId, tenant_id: tenantId, repo_full_name: data.repo,
+        user_id: ctx.userId, tenant_id: tenantId, repo_full_name: data.repo,
         branch: data.branch ?? null, commit_sha: data.sha ?? null, run_id: data.runId ?? null,
         status: "PENDING_APPROVAL", request_id: row.id,
       });
@@ -84,8 +86,10 @@ export const decideJob = createServerFn({ method: "POST" })
     z.object({ id: z.string().uuid(), approve: z.boolean(), reason: z.string().max(300).optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    const _u = await (await import("@/lib/engine-auth.server")).userDbFromRequest();
+    const ctx = { supabase: _u.db, userId: _u.userId as string };
     await assertAdmin(context);
-    const db = context.supabase;
+    const db = ctx.supabase;
     const { data: req } = await db.from("job_requests").select("*").eq("id", data.id).maybeSingle();
     if (!req) throw new Error("Request not found");
     if (req.status !== "PENDING") throw new Error(`Already ${req.status.toLowerCase()}`);
@@ -168,8 +172,10 @@ export const setTenantBalance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ tenantId: z.string().max(60), balance: z.number().min(0).max(1e7) }).parse(d))
   .handler(async ({ data, context }) => {
+    const _u = await (await import("@/lib/engine-auth.server")).userDbFromRequest();
+    const ctx = { supabase: _u.db, userId: _u.userId as string };
     await assertAdmin(context);
-    const { error } = await context.supabase.from("tenant_credits").upsert({ tenant_id: data.tenantId, balance: data.balance, updated_at: new Date().toISOString() });
+    const { error } = await ctx.supabase.from("tenant_credits").upsert({ tenant_id: data.tenantId, balance: data.balance, updated_at: new Date().toISOString() });
     if (error) throw new Error(error.message);
     return data;
   });
