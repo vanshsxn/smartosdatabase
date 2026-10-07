@@ -31,13 +31,15 @@ export const explainBilling = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => Input.parse(d))
   .handler(async ({ data, context }) => {
-    const { data: isAdmin } = await context.supabase.rpc("has_role", {
-      _user_id: context.userId,
+    const _u = await (await import("@/lib/engine-auth.server")).userDbFromRequest();
+    const ctx = { supabase: _u.db, userId: _u.userId as string };
+    const { data: isAdmin } = await ctx.supabase.rpc("has_role", {
+      _user_id: ctx.userId,
       _role: "admin",
     });
     if (isAdmin !== true) throw new Error("Only admins can run billing explanations.");
 
-    const db = context.supabase;
+    const db = ctx.supabase;
     const [{ data: reqs }, { data: credit }] = await Promise.all([
       db.from("job_requests")
         .select("id, name, type, priority, status, cores, memory_mb, estimated_ms, estimated_credits, engine_job_id, reason, created_at, decided_at")
