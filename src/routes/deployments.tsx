@@ -181,7 +181,7 @@ function DeploymentsPage() {
                 </p>
               </div>
             )}
-            {ghConnected && profile.data.connected && (
+            {ghConnected && profile.data?.connected && (
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <img src={profile.data.profile.avatarUrl} alt="" className="h-8 w-8 rounded-full" />

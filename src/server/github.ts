@@ -20,7 +20,7 @@ const CONNECTOR_ID = "github";
 export const GITHUB_SCOPES = ["read:user", "repo"];
 
 function clientKey(): string {
-  const key = process.env.GITHUB_APP_USER_CONNECTOR_CLIENT_API_KEY;
+  const key = process.env["GITHUB_APP_USER_CONNECTOR_CLIENT_API_KEY"];
   if (!key) {
     throw new Error(
       "GitHub sign-in is only available on the Lovable-hosted site (smarttaskrunner.lovable.app).",
@@ -121,12 +121,12 @@ export const fetchGithubRepos = createServerFn({ method: "GET" })
     );
     if (!r.connected) return { connected: false as const, reconnectRequired: r.reconnectRequired };
     const repos = (r.data as Array<Record<string, unknown>>).map((repo) => ({
-      fullName: repo.full_name as string,
-      private: Boolean(repo.private),
-      description: (repo.description as string | null) ?? null,
-      defaultBranch: (repo.default_branch as string) ?? "main",
-      updatedAt: repo.updated_at as string,
-      url: repo.html_url as string,
+      fullName: repo["full_name"] as string,
+      private: Boolean(repo["private"]),
+      description: (repo["description"] as string | null) ?? null,
+      defaultBranch: (repo["default_branch"] as string) ?? "main",
+      updatedAt: repo["updated_at"] as string,
+      url: repo["html_url"] as string,
     }));
     return { connected: true as const, repos };
   });
