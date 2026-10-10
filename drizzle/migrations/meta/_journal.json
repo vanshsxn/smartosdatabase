@@ -29,6 +29,13 @@
       "when": 1791266096178,
       "tag": "0003_user_write_policies_for_credits_and_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791607096886,
+      "tag": "0004_app_user_connections",
+      "breakpoints": true
     }
   ]
 }
