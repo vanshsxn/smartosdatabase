@@ -25,6 +25,7 @@ import { Route as TenantsRouteImport } from './routes/tenants'
 import { Route as ApiAiRelayRouteImport } from './routes/api/ai-relay'
 import { Route as ApiEngineSplatRouteImport } from './routes/api/engine/$'
 import { Route as ApiEngineStreamRouteImport } from './routes/api/engine/stream'
+import { Route as ApiOauthGithubReturnRouteImport } from './routes/api/oauth/github/return'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -106,6 +107,11 @@ const ApiEngineStreamRoute = ApiEngineStreamRouteImport.update({
   path: '/api/engine/stream',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOauthGithubReturnRoute = ApiOauthGithubReturnRouteImport.update({
+  id: '/api/oauth/github/return',
+  path: '/api/oauth/github/return',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -124,6 +130,7 @@ export interface FileRoutesByFullPath {
   '/api/ai-relay': typeof ApiAiRelayRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
   '/api/engine/stream': typeof ApiEngineStreamRoute
+  '/api/oauth/github/return': typeof ApiOauthGithubReturnRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByTo {
   '/api/ai-relay': typeof ApiAiRelayRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
   '/api/engine/stream': typeof ApiEngineStreamRoute
+  '/api/oauth/github/return': typeof ApiOauthGithubReturnRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -161,6 +169,7 @@ export interface FileRoutesById {
   '/api/ai-relay': typeof ApiAiRelayRoute
   '/api/engine/$': typeof ApiEngineSplatRoute
   '/api/engine/stream': typeof ApiEngineStreamRoute
+  '/api/oauth/github/return': typeof ApiOauthGithubReturnRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -181,6 +190,7 @@ export interface FileRouteTypes {
     | '/api/ai-relay'
     | '/api/engine/$'
     | '/api/engine/stream'
+    | '/api/oauth/github/return'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -199,6 +209,7 @@ export interface FileRouteTypes {
     | '/api/ai-relay'
     | '/api/engine/$'
     | '/api/engine/stream'
+    | '/api/oauth/github/return'
   id:
     | '__root__'
     | '/'
@@ -217,6 +228,7 @@ export interface FileRouteTypes {
     | '/api/ai-relay'
     | '/api/engine/$'
     | '/api/engine/stream'
+    | '/api/oauth/github/return'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -236,6 +248,7 @@ export interface RootRouteChildren {
   ApiAiRelayRoute: typeof ApiAiRelayRoute
   ApiEngineSplatRoute: typeof ApiEngineSplatRoute
   ApiEngineStreamRoute: typeof ApiEngineStreamRoute
+  ApiOauthGithubReturnRoute: typeof ApiOauthGithubReturnRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -352,6 +365,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiEngineStreamRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/oauth/github/return': {
+      id: '/api/oauth/github/return'
+      path: '/api/oauth/github/return'
+      fullPath: '/api/oauth/github/return'
+      preLoaderRoute: typeof ApiOauthGithubReturnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -372,6 +392,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAiRelayRoute: ApiAiRelayRoute,
   ApiEngineSplatRoute: ApiEngineSplatRoute,
   ApiEngineStreamRoute: ApiEngineStreamRoute,
+  ApiOauthGithubReturnRoute: ApiOauthGithubReturnRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
