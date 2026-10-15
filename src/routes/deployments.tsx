@@ -20,7 +20,7 @@ import {
   fetchGithubProfile,
   fetchGithubRepos,
   startGithubConnect,
-} from "@/server/github";
+} from "@/lib/github.functions";
 
 export const Route = createFileRoute("/deployments")({
   head: () => ({
