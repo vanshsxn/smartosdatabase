@@ -4,16 +4,20 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Activity,
   ArrowDown,
+  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Clock,
   Cpu,
+  FileText,
+  GitBranch,
   Layers,
   ListOrdered,
   Pause,
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   Sparkles,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -80,14 +84,14 @@ export const Route = createFileRoute("/scheduler")({
   component: SchedulerPage,
 });
 
-interface ProcessInfo {
+export interface ProcessInfo {
   pid: string; // P1, P2, P3...
   pIndex: number;
   jobId: number;
   jobName: string;
   jobType: string;
   priority: JobPriority;
-  status: "QUEUED" | "READY" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
+  status: "PENDING" | "QUEUED" | "READY" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
   queueLevel: number;
   quantumMs: number;
   requestedCores: number;
@@ -106,6 +110,8 @@ interface ProcessInfo {
     indicator: string;
   };
 }
+
+export type LifecycleState = "NEW" | "READY" | "RUNNING" | "TERMINATED";
 
 const PROCESS_COLORS = [
   {
@@ -173,6 +179,13 @@ const LEVEL_QUANTUMS: Record<number, number> = {
   3: 320,
 };
 
+function getLifecycleState(status: ProcessInfo["status"]): LifecycleState {
+  if (status === "PENDING") return "NEW";
+  if (status === "RUNNING") return "RUNNING";
+  if (status === "COMPLETED" || status === "FAILED" || status === "CANCELLED") return "TERMINATED";
+  return "READY";
+}
+
 function SchedulerPage() {
   const qc = useQueryClient();
   const { isAdmin } = useSession();
@@ -183,6 +196,7 @@ function SchedulerPage() {
   const jobRequests = useJobRequests();
 
   const [queueView, setQueueView] = useState<"active" | "all">("active");
+  const [selectedPid, setSelectedPid] = useState<string | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedType, setSelectedType] = useState(JOB_PRESETS[0]!.type);
   const [customName, setCustomName] = useState("");
@@ -220,7 +234,7 @@ function SchedulerPage() {
   const { allProcesses, activeProcesses, jobIdToProcess } = useMemo(() => {
     const rawJobs: Job[] = [...(jobs.data ?? [])];
 
-    // Also include pending job_requests if they haven't synced to engine yet
+    // Include pending job_requests if they haven't synced to engine yet
     const existingEngineIds = new Set(rawJobs.map((j) => j.id));
     const requests = jobRequests.data ?? [];
     for (const req of requests) {
@@ -254,6 +268,37 @@ function SchedulerPage() {
           completedAtMs: 0,
           errorMessage: "",
         });
+      } else if (!req.engine_job_id && req.status === "PENDING") {
+        // Pending approval in Job Pool (NEW state)
+        rawJobs.push({
+          id: -Math.abs(req.id.charCodeAt(0) * 100),
+          externalId: req.id,
+          tenantId: req.tenant_id,
+          userId: req.email ?? "user",
+          name: req.name,
+          type: req.type,
+          priority: (req.priority as JobPriority) ?? "MEDIUM",
+          status: "PENDING",
+          requestedCores: req.cores,
+          requestedMemoryMb: req.memory_mb,
+          estimatedMs: 3000,
+          remainingMs: 3000,
+          cpuTimeUsedMs: 0,
+          waitingMs: 0,
+          turnaroundMs: 0,
+          responseMs: 0,
+          queueLevel: 0,
+          contextSwitches: 0,
+          preemptions: 0,
+          memoryBase: 0,
+          lastScore: 1,
+          lastDecision: "Pending Admission Approval",
+          estimatedCredits: Number(req.estimated_credits),
+          creditsCharged: 0,
+          submittedAtMs: new Date(req.created_at).getTime(),
+          completedAtMs: 0,
+          errorMessage: "",
+        });
       }
     }
 
@@ -278,7 +323,8 @@ function SchedulerPage() {
 
       // Status translation to OS process state
       let pStatus: ProcessInfo["status"] = "QUEUED";
-      if (j.status === "RUNNING") pStatus = "RUNNING";
+      if (j.status === "PENDING") pStatus = "PENDING";
+      else if (j.status === "RUNNING") pStatus = "RUNNING";
       else if (j.status === "COMPLETED") pStatus = "COMPLETED";
       else if (j.status === "FAILED") pStatus = "FAILED";
       else if (j.status === "CANCELLED") pStatus = "CANCELLED";
@@ -320,6 +366,7 @@ function SchedulerPage() {
         p.status === "READY" ||
         p.status === "QUEUED" ||
         p.status === "RUNNING" ||
+        p.status === "PENDING" ||
         queuedIds.has(p.jobId),
     );
 
@@ -329,6 +376,15 @@ function SchedulerPage() {
       jobIdToProcess: mapping,
     };
   }, [jobs.data, jobRequests.data, queues.data]);
+
+  // Handle selected process for Interactive State Machine
+  const activeSelectedPid =
+    selectedPid && allProcesses.some((p) => p.pid === selectedPid)
+      ? selectedPid
+      : (activeProcesses[0]?.pid ?? allProcesses[0]?.pid ?? null);
+
+  const selectedProcess = allProcesses.find((p) => p.pid === activeSelectedPid) ?? null;
+  const currentLifecycleState = selectedProcess ? getLifecycleState(selectedProcess.status) : null;
 
   // Handle Quick Job submission from Scheduler page
   const handleQuickAddJob = async () => {
@@ -353,6 +409,7 @@ function SchedulerPage() {
       toast.success(`Job admitted as Process P${nextPIndex}! Enqueued in MLFQ Level 0.`);
       setAddDialogOpen(false);
       setCustomName("");
+      setSelectedPid(`P${nextPIndex}`);
       invalidate();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to admit job");
@@ -464,7 +521,7 @@ function SchedulerPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Queue order of admitted processes waiting for CPU time slices (Dispatched HEAD ➔ TAIL).
+              Queue order of admitted processes waiting for CPU time slices. Click any process card to highlight its state below!
             </p>
           </div>
 
@@ -520,12 +577,18 @@ function SchedulerPage() {
                   const isHead = idx === 0;
                   const isTail = idx === displayedQueueProcesses.length - 1;
                   const isRunning = p.status === "RUNNING";
+                  const isSelected = p.pid === activeSelectedPid;
 
                   return (
                     <div key={p.jobId || p.pid} className="flex items-center gap-3">
                       {/* Process Card */}
                       <div
-                        className={`group relative flex w-64 flex-col rounded-xl border p-3 shadow-sm transition-all duration-200 hover:shadow-md ${p.color.border} ${p.color.bg}`}
+                        onClick={() => setSelectedPid(p.pid)}
+                        className={`group relative flex w-64 flex-col rounded-xl border p-3 shadow-sm transition-all duration-200 cursor-pointer ${
+                          isSelected
+                            ? "ring-2 ring-primary ring-offset-2 shadow-md scale-102"
+                            : "hover:shadow-md hover:border-primary/60"
+                        } ${p.color.border} ${p.color.bg}`}
                       >
                         {/* Header: Process ID badge + Status */}
                         <div className="flex items-center justify-between">
@@ -591,7 +654,7 @@ function SchedulerPage() {
                           </div>
                         </div>
 
-                        {/* Queue Position Pill */}
+                        {/* Queue Position Pill & Inspection Hint */}
                         <div className="mt-2 flex items-center justify-between text-[10px] pt-1.5 border-t border-border/40">
                           <span className="text-muted-foreground">
                             {isHead ? (
@@ -600,8 +663,8 @@ function SchedulerPage() {
                               `Pos #${idx + 1}`
                             )}
                           </span>
-                          <span className="text-muted-foreground">
-                            Switches: {p.contextSwitches}
+                          <span className="text-[10px] font-medium text-primary">
+                            {isSelected ? "Inspecting" : "Click to inspect"}
                           </span>
                         </div>
                       </div>
@@ -666,6 +729,356 @@ function SchedulerPage() {
                 )}
               </div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* NEW FEATURE: OS Process State Machine (Interactive Lifecycle Diagram) */}
+      <Card className="border-border">
+        <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <GitBranch className="h-5 w-5 text-primary" />
+                <CardTitle className="text-base sm:text-lg">
+                  OS Process State Machine (Interactive Lifecycle Diagram)
+                </CardTitle>
+                <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">
+                  State Diagram
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Standard OS process lifecycle: <b>NEW ➔ READY ⇌ RUNNING ➔ TERMINATED</b>. Select a process below or in the queue to highlight its current active state!
+              </p>
+            </div>
+
+            {/* Quick Process Selector Chips */}
+            {allProcesses.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-medium text-muted-foreground mr-1">Process:</span>
+                {allProcesses.slice(0, 8).map((p) => {
+                  const isSelected = p.pid === activeSelectedPid;
+                  return (
+                    <button
+                      key={p.pid}
+                      type="button"
+                      onClick={() => setSelectedPid(p.pid)}
+                      className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold transition-all cursor-pointer ${
+                        isSelected
+                          ? `${p.color.badge} shadow-xs ring-2 ring-primary ring-offset-2 scale-105`
+                          : "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border"
+                      }`}
+                    >
+                      <span>{p.pid}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-4 sm:p-6 space-y-6">
+          {/* Visual State Nodes & Transition Connectors */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-4 items-center">
+            {/* 1. NEW STATE */}
+            <div
+              className={`relative flex flex-col rounded-xl border p-4 transition-all duration-300 ${
+                currentLifecycleState === "NEW"
+                  ? "ring-4 ring-amber-500/30 border-amber-500 bg-amber-500/10 shadow-md scale-102"
+                  : "border-border/70 bg-card/70 opacity-70 hover:opacity-100"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <span className="font-bold text-sm tracking-wide text-foreground">NEW</span>
+                </div>
+                {currentLifecycleState === "NEW" && (
+                  <Badge className="bg-amber-600 text-white text-[10px] animate-pulse">
+                    Current State
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-2 text-xs font-medium text-foreground">Job Admission Pool</p>
+              <p className="mt-1 text-[11px] text-muted-foreground leading-normal">
+                Job submitted. Long-Term Scheduler prepares PCB and reserves system resources.
+              </p>
+              {currentLifecycleState === "NEW" && selectedProcess && (
+                <div className="mt-3 rounded bg-amber-500/20 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-200">
+                  📍 {selectedProcess.pid} ({selectedProcess.jobName}) is awaiting admission
+                </div>
+              )}
+            </div>
+
+            {/* 2. READY STATE */}
+            <div
+              className={`relative flex flex-col rounded-xl border p-4 transition-all duration-300 ${
+                currentLifecycleState === "READY"
+                  ? "ring-4 ring-blue-500/30 border-blue-500 bg-blue-500/10 shadow-md scale-102"
+                  : "border-border/70 bg-card/70 opacity-70 hover:opacity-100"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold">
+                    <Layers className="h-4 w-4" />
+                  </div>
+                  <span className="font-bold text-sm tracking-wide text-foreground">READY</span>
+                </div>
+                {currentLifecycleState === "READY" && (
+                  <Badge className="bg-blue-600 text-white text-[10px] animate-pulse">
+                    Current State
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-2 text-xs font-medium text-foreground">MLFQ Ready Queue</p>
+              <p className="mt-1 text-[11px] text-muted-foreground leading-normal">
+                PCB allocated. Waiting in queue (Level 0 - 40ms) for Short-Term Scheduler to dispatch.
+              </p>
+              {currentLifecycleState === "READY" && selectedProcess && (
+                <div className="mt-3 rounded bg-blue-500/20 px-2 py-1 text-[11px] font-semibold text-blue-800 dark:text-blue-200">
+                  📍 {selectedProcess.pid} is in Ready Queue (Level {selectedProcess.queueLevel})
+                </div>
+              )}
+            </div>
+
+            {/* 3. RUNNING STATE */}
+            <div
+              className={`relative flex flex-col rounded-xl border p-4 transition-all duration-300 ${
+                currentLifecycleState === "RUNNING"
+                  ? "ring-4 ring-emerald-500/30 border-emerald-500 bg-emerald-500/10 shadow-md scale-102"
+                  : "border-border/70 bg-card/70 opacity-70 hover:opacity-100"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold">
+                    <Cpu className="h-4 w-4" />
+                  </div>
+                  <span className="font-bold text-sm tracking-wide text-foreground">RUNNING</span>
+                </div>
+                {currentLifecycleState === "RUNNING" && (
+                  <Badge className="bg-emerald-600 text-white text-[10px] animate-pulse">
+                    Executing in CPU
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-2 text-xs font-medium text-foreground">CPU Worker Core</p>
+              <p className="mt-1 text-[11px] text-muted-foreground leading-normal">
+                Executing instructions on CPU. If quantum expires before burst ends, process preempts back to READY.
+              </p>
+              {currentLifecycleState === "RUNNING" && selectedProcess && (
+                <div className="mt-3 rounded bg-emerald-500/20 px-2 py-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-200">
+                  📍 {selectedProcess.pid} is running ({selectedProcess.quantumMs}ms time slice)
+                </div>
+              )}
+            </div>
+
+            {/* 4. TERMINATED STATE */}
+            <div
+              className={`relative flex flex-col rounded-xl border p-4 transition-all duration-300 ${
+                currentLifecycleState === "TERMINATED"
+                  ? "ring-4 ring-purple-500/30 border-purple-500 bg-purple-500/10 shadow-md scale-102"
+                  : "border-border/70 bg-card/70 opacity-70 hover:opacity-100"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-400 font-bold">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </div>
+                  <span className="font-bold text-sm tracking-wide text-foreground">TERMINATED</span>
+                </div>
+                {currentLifecycleState === "TERMINATED" && (
+                  <Badge className="bg-purple-600 text-white text-[10px]">Completed</Badge>
+                )}
+              </div>
+              <p className="mt-2 text-xs font-medium text-foreground">Execution Finished</p>
+              <p className="mt-1 text-[11px] text-muted-foreground leading-normal">
+                Job complete. Memory and CPU workers released, metrics (TAT, WT) saved to database.
+              </p>
+              {currentLifecycleState === "TERMINATED" && selectedProcess && (
+                <div className="mt-3 rounded bg-purple-500/20 px-2 py-1 text-[11px] font-semibold text-purple-800 dark:text-purple-200">
+                  📍 {selectedProcess.pid} finished execution ({selectedProcess.cpuTimeUsedMs}ms CPU time)
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Transition Legend / OS Flow Paths */}
+          <div className="rounded-lg border border-border/70 bg-muted/30 p-3 sm:p-4 text-xs space-y-2">
+            <p className="font-semibold text-foreground text-xs uppercase tracking-wider flex items-center gap-1.5">
+              <Activity className="h-4 w-4 text-primary" />
+              <span>OS State Transition Rules (Interactive MLFQ Flow):</span>
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-[11px]">
+              <div className="rounded border border-border/50 bg-background/80 p-2 space-y-0.5">
+                <div className="font-semibold text-foreground flex items-center gap-1">
+                  <ArrowRight className="h-3.5 w-3.5 text-primary" />
+                  <span>Admit (NEW ➔ READY):</span>
+                </div>
+                <p className="text-muted-foreground">
+                  Job Scheduler admits job, creates PCB, assigns Process ID (P1, P2...) and places in Level 0 (40ms).
+                </p>
+              </div>
+
+              <div className="rounded border border-border/50 bg-background/80 p-2 space-y-0.5">
+                <div className="font-semibold text-foreground flex items-center gap-1">
+                  <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Dispatch ⇌ Preempt (READY ⇌ RUNNING):</span>
+                </div>
+                <p className="text-muted-foreground">
+                  Dispatcher assigns CPU. If burst &gt; quantum, timer interrupt preempts process back to READY (demoted to next MLFQ queue).
+                </p>
+              </div>
+
+              <div className="rounded border border-border/50 bg-background/80 p-2 space-y-0.5">
+                <div className="font-semibold text-foreground flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                  <span>Exit (RUNNING ➔ TERMINATED):</span>
+                </div>
+                <p className="text-muted-foreground">
+                  CPU burst finishes. Resources deallocated, PCB archived, and turnaround time recorded.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Selected Process Live Inspector */}
+          {selectedProcess ? (
+            <div
+              className={`rounded-xl border p-4 transition-all ${selectedProcess.color.border} ${selectedProcess.color.bg}`}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/40 pb-3">
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`flex h-10 w-10 items-center justify-center rounded-xl font-bold text-base shadow-sm ${selectedProcess.color.badge}`}
+                  >
+                    {selectedProcess.pid}
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-sm text-foreground">
+                        {selectedProcess.jobName}
+                      </h4>
+                      <Badge variant="outline" className="text-[10px]">
+                        Job #{selectedProcess.jobId}
+                      </Badge>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {selectedProcess.priority} Priority
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Type: <b>{selectedProcess.jobType}</b> · Allocated:{" "}
+                      <b>{selectedProcess.requestedCores} Cores</b> ·{" "}
+                      <b>{selectedProcess.requestedMemoryMb} MB RAM</b>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Active OS State:</span>
+                  <Badge
+                    className={`text-xs px-2.5 py-1 font-semibold ${
+                      currentLifecycleState === "RUNNING"
+                        ? "bg-emerald-600 text-white animate-pulse"
+                        : currentLifecycleState === "READY"
+                        ? "bg-blue-600 text-white"
+                        : currentLifecycleState === "NEW"
+                        ? "bg-amber-600 text-white"
+                        : "bg-purple-600 text-white"
+                    }`}
+                  >
+                    {currentLifecycleState}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Lifecycle Breadcrumb */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-muted-foreground font-medium">Lifecycle Journey:</span>
+                <span className="rounded bg-background px-2 py-0.5 border border-border text-muted-foreground">
+                  1. Job Submissions
+                </span>
+                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                <span className="rounded bg-background px-2 py-0.5 border border-border text-muted-foreground">
+                  2. PCB Created ({selectedProcess.pid})
+                </span>
+                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                <span
+                  className={`rounded px-2 py-0.5 border font-semibold ${
+                    currentLifecycleState === "READY"
+                      ? "bg-blue-500/20 border-blue-500 text-blue-700 dark:text-blue-300"
+                      : "bg-background border-border text-muted-foreground"
+                  }`}
+                >
+                  3. READY (Level {selectedProcess.queueLevel})
+                </span>
+                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                <span
+                  className={`rounded px-2 py-0.5 border font-semibold ${
+                    currentLifecycleState === "RUNNING"
+                      ? "bg-emerald-500/20 border-emerald-500 text-emerald-700 dark:text-emerald-300 animate-pulse"
+                      : "bg-background border-border text-muted-foreground"
+                  }`}
+                >
+                  4. RUNNING ({selectedProcess.quantumMs}ms slice)
+                </span>
+                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                <span
+                  className={`rounded px-2 py-0.5 border font-semibold ${
+                    currentLifecycleState === "TERMINATED"
+                      ? "bg-purple-500/20 border-purple-500 text-purple-700 dark:text-purple-300"
+                      : "bg-background border-border text-muted-foreground"
+                  }`}
+                >
+                  5. TERMINATED
+                </span>
+              </div>
+
+              {/* Process PCB Telemetry Stats */}
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-border/40 text-xs">
+                <div>
+                  <span className="text-[10px] text-muted-foreground block uppercase">
+                    MLFQ Queue Level
+                  </span>
+                  <span className="font-semibold text-foreground">
+                    Level {selectedProcess.queueLevel} ({selectedProcess.quantumMs} ms quantum)
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block uppercase">
+                    CPU Burst Used
+                  </span>
+                  <span className="font-semibold text-foreground">
+                    {selectedProcess.cpuTimeUsedMs} ms / {selectedProcess.estimatedMs} ms
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block uppercase">
+                    Context Switches
+                  </span>
+                  <span className="font-semibold text-foreground">
+                    {selectedProcess.contextSwitches} switches
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block uppercase">
+                    Preemptions
+                  </span>
+                  <span className="font-semibold text-foreground">
+                    {selectedProcess.preemptions} demotions
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-2">
+              No process selected. Click any process card in the Ready Queue or click "+ Add Job" to inspect!
+            </p>
           )}
         </CardContent>
       </Card>
@@ -834,27 +1247,35 @@ function SchedulerPage() {
                     {/* Queue Lane Tracks */}
                     <div className="mt-2.5 flex flex-wrap items-center gap-2 min-h-8 rounded-md bg-muted/30 p-2 border border-border/40">
                       {processesInLevel.length ? (
-                        processesInLevel.map((p) => (
-                          <div
-                            key={p.jobId}
-                            className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs shadow-2xs ${p.color.border} ${p.color.bg}`}
-                          >
-                            <span
-                              className={`flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold ${p.color.badge}`}
+                        processesInLevel.map((p) => {
+                          const isSelected = p.pid === activeSelectedPid;
+                          return (
+                            <div
+                              key={p.jobId}
+                              onClick={() => setSelectedPid(p.pid)}
+                              className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs shadow-2xs cursor-pointer transition-all ${
+                                isSelected
+                                  ? "ring-2 ring-primary ring-offset-1 scale-105"
+                                  : "hover:scale-102"
+                              } ${p.color.border} ${p.color.bg}`}
                             >
-                              {p.pid}
-                            </span>
-                            <span className="font-medium text-foreground max-w-[120px] truncate">
-                              {p.jobName}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              (#{p.jobId})
-                            </span>
-                            {p.status === "RUNNING" && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
-                            )}
-                          </div>
-                        ))
+                              <span
+                                className={`flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold ${p.color.badge}`}
+                              >
+                                {p.pid}
+                              </span>
+                              <span className="font-medium text-foreground max-w-[120px] truncate">
+                                {p.jobName}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">
+                                (#{p.jobId})
+                              </span>
+                              {p.status === "RUNNING" && (
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                              )}
+                            </div>
+                          );
+                        })
                       ) : (
                         <span className="text-xs text-muted-foreground italic pl-1">
                           Queue empty — no processes currently waiting in Level {lvlNum}
@@ -886,7 +1307,7 @@ function SchedulerPage() {
               <span>Process Control Block (PCB) &amp; Job Conversion Registry</span>
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Operating system PCB structures allocated for every submitted job (P1, P2, P3...).
+              Operating system PCB structures allocated for every submitted job (P1, P2, P3...). Click any row to trace in the State Machine!
             </p>
           </div>
           <Badge variant="outline" className="text-xs self-start sm:self-auto">
@@ -911,57 +1332,66 @@ function SchedulerPage() {
               </TableHeader>
               <TableBody>
                 {allProcesses.length ? (
-                  allProcesses.map((p) => (
-                    <TableRow key={p.jobId || p.pid}>
-                      <TableCell className="font-mono">
-                        <span
-                          className={`inline-flex items-center justify-center rounded px-2 py-0.5 font-bold text-xs ${p.color.badge}`}
-                        >
-                          {p.pid}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium text-foreground text-xs">{p.jobName}</div>
-                        <div className="text-[10px] text-muted-foreground font-mono">
-                          Job #{p.jobId} · {p.priority}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        <Badge variant="outline" className="text-[10px]">
-                          {p.jobType}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            p.status === "RUNNING"
-                              ? "default"
-                              : p.status === "COMPLETED"
-                              ? "secondary"
-                              : "outline"
-                          }
-                          className="text-[10px]"
-                        >
-                          {p.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs font-mono">
-                        Level {p.queueLevel} ({p.quantumMs} ms)
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {p.requestedCores} cores · {p.requestedMemoryMb} MB
-                      </TableCell>
-                      <TableCell className="text-xs font-mono">
-                        {p.cpuTimeUsedMs} ms / {p.estimatedMs} ms
-                      </TableCell>
-                      <TableCell className="text-xs font-mono text-center">
-                        {p.contextSwitches}
-                      </TableCell>
-                      <TableCell className="text-xs font-mono text-center">
-                        {p.preemptions}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  allProcesses.map((p) => {
+                    const isSelected = p.pid === activeSelectedPid;
+                    return (
+                      <TableRow
+                        key={p.jobId || p.pid}
+                        onClick={() => setSelectedPid(p.pid)}
+                        className={`cursor-pointer transition-colors ${
+                          isSelected ? "bg-primary/10 hover:bg-primary/15 font-medium" : "hover:bg-muted/50"
+                        }`}
+                      >
+                        <TableCell className="font-mono">
+                          <span
+                            className={`inline-flex items-center justify-center rounded px-2 py-0.5 font-bold text-xs ${p.color.badge}`}
+                          >
+                            {p.pid}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium text-foreground text-xs">{p.jobName}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono">
+                            Job #{p.jobId} · {p.priority}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <Badge variant="outline" className="text-[10px]">
+                            {p.jobType}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              p.status === "RUNNING"
+                                ? "default"
+                                : p.status === "COMPLETED"
+                                ? "secondary"
+                                : "outline"
+                            }
+                            className="text-[10px]"
+                          >
+                            {p.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs font-mono">
+                          Level {p.queueLevel} ({p.quantumMs} ms)
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {p.requestedCores} cores · {p.requestedMemoryMb} MB
+                        </TableCell>
+                        <TableCell className="text-xs font-mono">
+                          {p.cpuTimeUsedMs} ms / {p.estimatedMs} ms
+                        </TableCell>
+                        <TableCell className="text-xs font-mono text-center">
+                          {p.contextSwitches}
+                        </TableCell>
+                        <TableCell className="text-xs font-mono text-center">
+                          {p.preemptions}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-6 text-xs text-muted-foreground">
