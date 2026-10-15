@@ -141,11 +141,11 @@ export function AppLayout({ title, children }: { title: string; children: ReactN
           <div className="ml-auto flex items-center gap-3">
             {isAdmin ? (
               <Select value={tenantId || "all"} onValueChange={(v) => setTenantId(v === "all" ? "" : v)}>
-                <SelectTrigger className="w-[220px]">
+                <SelectTrigger className="w-[140px] sm:w-[160px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Admin · All tenants</SelectItem>
+                  <SelectItem value="all">Admin</SelectItem>
                   {tenants.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
                       {t.name}
