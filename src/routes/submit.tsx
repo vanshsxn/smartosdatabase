@@ -43,10 +43,22 @@ function SubmitPage() {
   const submit = useMutation({
     mutationFn: () => send({ data: { name, type, priority, input: preset.ai ? input : undefined } }),
     onSuccess: (r) => {
-      if (r.auto) toast.success(`Small job ran automatically (${r.estimated.toFixed(2)} credits) — ${r.status.toLowerCase()}.`);
-      else toast.success(`Request sent (${r.estimated.toFixed(2)} credits). Waiting for admin approval.`);
+      if (r.auto) {
+        if (r.status === "COMPLETED") {
+          toast.success(`Small job ran automatically (${r.estimated.toFixed(2)} credits) — completed.`);
+        } else if (r.status === "RUNNING") {
+          toast.success(`Small job admitted to MLFQ scheduler (${r.estimated.toFixed(2)} credits) — running.`);
+        } else if (r.status === "FAILED") {
+          toast.error(`Job failed (${r.estimated.toFixed(2)} credits refunded).`);
+        } else {
+          toast.success(`Small job processed (${r.estimated.toFixed(2)} credits) — ${r.status.toLowerCase()}.`);
+        }
+      } else {
+        toast.success(`Request sent (${r.estimated.toFixed(2)} credits). Waiting for admin approval.`);
+      }
       setInput("");
       qc.invalidateQueries({ queryKey: ["job-requests"] });
+      qc.invalidateQueries({ queryKey: ["engine"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
