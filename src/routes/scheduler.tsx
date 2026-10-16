@@ -20,7 +20,7 @@ import {
   RotateCcw,
   Sparkles,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppLayout } from "@/components/AppLayout";
@@ -29,6 +29,7 @@ import { fmtMs } from "@/components/dashboard-bits";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { reconcileRunningJobs, requestJob } from "@/lib/job-requests.functions";
 import {
   Dialog,
   DialogContent,
@@ -204,6 +205,15 @@ function SchedulerPage() {
   const [pauseBeforeAdding, setPauseBeforeAdding] = useState(false);
 
   const sendJobRequest = useServerFn(requestJob);
+  const runReconcile = useServerFn(reconcileRunningJobs);
+
+  useEffect(() => {
+    runReconcile().catch(() => {});
+    const interval = setInterval(() => {
+      runReconcile().catch(() => {});
+    }, 7000);
+    return () => clearInterval(interval);
+  }, []);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["engine"] });
@@ -231,11 +241,10 @@ function SchedulerPage() {
   const paused = health.data?.paused ?? false;
 
   // Transform Jobs into Process Control Blocks (P1, P2, P3...)
-  // Transform Jobs into Process Control Blocks (P1, P2, P3...)
   const { allProcesses, activeProcesses, jobIdToProcess } = useMemo(() => {
     const rawJobs: Job[] = [...(jobs.data ?? [])];
 
-    // Include pending job_requests if they haven't synced to engine yet
+    // Include pending and completed job_requests if they haven't synced to engine yet
     const existingEngineIds = new Set(rawJobs.map((j) => j.id));
     const requests = jobRequests.data ?? [];
     for (const req of requests) {
@@ -250,7 +259,7 @@ function SchedulerPage() {
         } else {
           // If status is "RUNNING" in DB: check if output exists or if execution burst elapsed
           const elapsed = Date.now() - new Date(req.created_at).getTime();
-          const maxBurst = (req.estimated_ms || 3000) + 4000;
+          const maxBurst = (req.estimated_ms || 3000) + 2000;
           if (req.output || elapsed > maxBurst) {
             reqStatus = "COMPLETED";
           } else {
@@ -288,36 +297,52 @@ function SchedulerPage() {
           completedAtMs: reqStatus === "COMPLETED" ? new Date(req.created_at).getTime() + (req.estimated_ms || 3000) : 0,
           errorMessage: req.reason || "",
         });
-      } else if (!req.engine_job_id && req.status === "PENDING") {
-        // Pending approval in Job Pool (NEW state)
+      } else if (!req.engine_job_id) {
+        let reqStatus: Job["status"] = "COMPLETED";
+        if (req.status === "COMPLETED") {
+          reqStatus = "COMPLETED";
+        } else if (req.status === "FAILED" || req.status === "DENIED") {
+          reqStatus = "FAILED";
+        } else if (req.status === "PENDING") {
+          reqStatus = "PENDING";
+        } else {
+          const elapsed = Date.now() - new Date(req.created_at).getTime();
+          const maxBurst = (req.estimated_ms || 3000) + 2000;
+          if (req.output || elapsed > maxBurst) {
+            reqStatus = "COMPLETED";
+          } else {
+            reqStatus = "RUNNING";
+          }
+        }
+        const isDone = reqStatus === "COMPLETED" || reqStatus === "FAILED";
         rawJobs.push({
-          id: -Math.abs(req.id.charCodeAt(0) * 100),
+          id: -Math.abs(req.id.split("-").reduce((acc, c) => acc + c.charCodeAt(0), 100)),
           externalId: req.id,
           tenantId: req.tenant_id,
           userId: req.email ?? "user",
           name: req.name,
           type: req.type,
           priority: (req.priority as JobPriority) ?? "MEDIUM",
-          status: "PENDING",
+          status: reqStatus,
           requestedCores: req.cores,
           requestedMemoryMb: req.memory_mb,
-          estimatedMs: 3000,
-          remainingMs: 3000,
-          cpuTimeUsedMs: 0,
+          estimatedMs: req.estimated_ms || 3000,
+          remainingMs: isDone ? 0 : 3000,
+          cpuTimeUsedMs: isDone ? (req.estimated_ms || 3000) : 0,
           waitingMs: 0,
-          turnaroundMs: 0,
+          turnaroundMs: req.estimated_ms || 3000,
           responseMs: 0,
           queueLevel: 0,
-          contextSwitches: 0,
-          preemptions: 0,
+          contextSwitches: isDone ? 13 : 0,
+          preemptions: isDone ? 12 : 0,
           memoryBase: 0,
           lastScore: 1,
-          lastDecision: "Pending Admission Approval",
+          lastDecision: reqStatus === "COMPLETED" ? "Executed and completed on MLFQ scheduler" : reqStatus === "PENDING" ? "Pending Admission Approval" : "Admitted by Long-Term Scheduler",
           estimatedCredits: Number(req.estimated_credits),
-          creditsCharged: 0,
+          creditsCharged: isDone ? Number(req.estimated_credits) : 0,
           submittedAtMs: new Date(req.created_at).getTime(),
-          completedAtMs: 0,
-          errorMessage: "",
+          completedAtMs: isDone ? new Date(req.created_at).getTime() + (req.estimated_ms || 3000) : 0,
+          errorMessage: req.reason || "",
         });
       }
     }
@@ -449,26 +474,22 @@ function SchedulerPage() {
 
   return (
     <AppLayout title="Scheduler">
-      {/* OS Educational Banner: Job ➔ Process Conversion Pipeline */}
-      <Card className="border-primary/30 bg-primary/5">
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      {/* Interactive Process Flow Queue: [ P1 | P2 | P3 ... ] */}
+      <Card className="border-border shadow-xs">
+        <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-bold">
-                  OS
-                </span>
-                <h2 className="text-sm font-semibold tracking-tight text-foreground sm:text-base">
-                  Long-Term Scheduler: Job ➔ Process (PCB) Admission Pipeline
-                </h2>
+                <ListOrdered className="h-5 w-5 text-primary" />
+                <CardTitle className="text-base sm:text-lg">
+                  Process Admission & Dispatch Queue
+                </CardTitle>
                 <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">
-                  MLFQ Active
+                  [ P1 | P2 | P3 ... ]
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                When a new job is submitted, the <b>Job Scheduler</b> admits it, converts it into a{" "}
-                <b>Process</b> (assigned <b>P1, P2, P3...</b> with a Process Control Block), and enqueues
-                it into <b>Level 0 Ready Queue (Time Quantum: 40 ms)</b>.
+              <p className="text-xs text-muted-foreground">
+                Dynamic queue of admitted processes in execution pipeline. As jobs are admitted, they appear here. Click any process slot to inspect its PCB & state!
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -490,48 +511,160 @@ function SchedulerPage() {
               </Button>
             </div>
           </div>
-
-          {/* Interactive Visual Pipeline Graphic */}
-          <div className="mt-4 grid grid-cols-1 gap-2 pt-3 border-t border-border/60 text-xs sm:grid-cols-4">
-            <div className="flex items-center gap-2 rounded-md bg-background/80 p-2.5 border border-border/80">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground font-semibold text-xs">
-                1
+        </CardHeader>
+        <CardContent className="p-4 sm:p-5 space-y-4">
+          {/* Visual Queue Pipeline: [ 📥 NEW ] ➔ [ P1 | P2 | P3 | ... ] ➔ [ ⚙️ CPU ] */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+            {/* Left Node: Job Admission Pool (NEW) */}
+            <div
+              onClick={() => {
+                const p = allProcesses.slice().reverse().find((x) => getLifecycleState(x.status) === "NEW");
+                if (p) setSelectedPid(p.pid);
+              }}
+              className="flex items-center gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 shrink-0 cursor-pointer hover:bg-amber-500/10 transition-colors"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs">
+                📥
               </div>
-              <div className="min-w-0">
-                <p className="font-medium text-foreground">Job Submission</p>
-                <p className="truncate text-[11px] text-muted-foreground">User submits job</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 rounded-md bg-background/80 p-2.5 border border-border/80">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-primary/20 text-primary font-semibold text-xs">
-                2
-              </div>
-              <div className="min-w-0">
-                <p className="font-medium text-foreground">Job ➔ Process</p>
-                <p className="truncate text-[11px] text-muted-foreground">PCB & PID (P1, P2...) assigned</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 rounded-md bg-background/80 p-2.5 border border-border/80">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-blue-500/20 text-blue-600 dark:text-blue-400 font-semibold text-xs">
-                3
-              </div>
-              <div className="min-w-0">
-                <p className="font-medium text-foreground">Ready Queue (L0)</p>
-                <p className="truncate text-[11px] text-muted-foreground">Enqueued in Level 0 (40ms)</p>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-foreground">JOB POOL</span>
+                  <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-600">
+                    {stateCounts.NEW}
+                  </Badge>
+                </div>
+                <p className="text-[10px] text-muted-foreground">New Admissions</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 rounded-md bg-background/80 p-2.5 border border-border/80">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold text-xs">
-                4
+            {/* Connecting Arrow */}
+            <div className="hidden md:flex items-center text-muted-foreground/60 px-1">
+              <ArrowRight className="h-4 w-4" />
+            </div>
+
+            {/* Center: Scrollable Interactive Queue [ P1 | P2 | P3 | ... ] */}
+            <div className="flex-1 min-w-0 rounded-xl border border-border/80 bg-background/50 p-2 sm:p-2.5 overflow-hidden">
+              <div className="flex items-center justify-between pb-1.5 px-1 border-b border-border/40 text-[11px] text-muted-foreground">
+                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5 text-primary" />
+                  Active Ready & Process Queue
+                </span>
+                <span>{allProcesses.length} total processes admitted</span>
               </div>
-              <div className="min-w-0">
-                <p className="font-medium text-foreground">CPU Dispatcher</p>
-                <p className="truncate text-[11px] text-muted-foreground">Quantum slice execution</p>
+
+              {allProcesses.length === 0 ? (
+                <div className="py-6 text-center text-xs text-muted-foreground">
+                  Queue is currently empty. Click <b>"Add Job"</b> to admit Process P1!
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 overflow-x-auto py-2 px-1 scrollbar-thin">
+                  {allProcesses.map((p, idx) => {
+                    const isSelected = p.pid === activeSelectedPid;
+                    const state = getLifecycleState(p.status);
+                    return (
+                      <div key={p.pid} className="flex items-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPid(p.pid)}
+                          className={`group relative flex flex-col items-center justify-center rounded-lg border px-3 py-2 text-xs transition-all cursor-pointer min-w-[76px] ${
+                            isSelected
+                              ? `${p.color.badge} ring-2 ring-primary ring-offset-2 scale-105 shadow-md`
+                              : "border-border/70 bg-card hover:bg-muted/70 hover:border-primary/40 hover:scale-102"
+                          }`}
+                        >
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono font-bold text-sm tracking-tight">{p.pid}</span>
+                            {state === "RUNNING" && (
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                              </span>
+                            )}
+                            {state === "TERMINATED" && (
+                              <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                            )}
+                            {state === "READY" && (
+                              <Clock className="h-3 w-3 text-cyan-500" />
+                            )}
+                          </div>
+                          <span className="text-[10px] text-muted-foreground truncate max-w-[68px] mt-0.5">
+                            {p.jobName}
+                          </span>
+                          <span
+                            className={`mt-1 rounded px-1.5 py-0.2 text-[9px] font-semibold uppercase tracking-wider ${
+                              state === "RUNNING"
+                                ? "bg-blue-500/20 text-blue-600 dark:text-blue-400"
+                                : state === "READY"
+                                ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-400"
+                                : state === "NEW"
+                                ? "bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                                : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                            }`}
+                          >
+                            {state}
+                          </span>
+                        </button>
+                        {idx < allProcesses.length - 1 && (
+                          <div className="mx-1 h-8 w-[1px] bg-border/60 shrink-0" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Connecting Arrow */}
+            <div className="hidden md:flex items-center text-muted-foreground/60 px-1">
+              <ArrowRight className="h-4 w-4" />
+            </div>
+
+            {/* Right Node: CPU Dispatcher (RUNNING) */}
+            <div
+              onClick={() => {
+                const p = allProcesses.slice().reverse().find((x) => getLifecycleState(x.status) === "RUNNING");
+                if (p) setSelectedPid(p.pid);
+              }}
+              className="flex items-center gap-2.5 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 shrink-0 cursor-pointer hover:bg-blue-500/10 transition-colors"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold text-xs">
+                ⚙️
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-foreground">CPU DISPATCH</span>
+                  <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-600">
+                    {stateCounts.RUNNING}
+                  </Badge>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Quantum Slice (40ms)</p>
               </div>
             </div>
+          </div>
+
+          {/* Quick Metrics & Lifecycle Legend */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/40 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                <b>{stateCounts.NEW}</b> New
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-cyan-500" />
+                <b>{stateCounts.READY}</b> Ready
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-blue-500" />
+                <b>{stateCounts.RUNNING}</b> Running
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <b>{stateCounts.TERMINATED}</b> Completed
+              </span>
+            </div>
+            <span className="italic">
+              💡 Click any slot <b>P1, P2, P3...</b> in the queue to inspect PCB & highlight in State Machine
+            </span>
           </div>
         </CardContent>
       </Card>

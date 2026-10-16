@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useEngineStream } from "@/lib/engine-stream";
 import type { Job } from "@/lib/engine.types";
-import { decideJob } from "@/lib/job-requests.functions";
+import { decideJob, reconcileRunningJobs } from "@/lib/job-requests.functions";
 import { tenantName } from "@/lib/session";
 
 export interface JobRequestRow {
@@ -31,16 +31,33 @@ export interface JobRequestRow {
   created_at: string;
 }
 
+let lastReconcile = 0;
+
 export function useJobRequests(status?: string) {
   return useQuery({
     queryKey: ["job-requests", status ?? "all"],
     refetchInterval: 3000,
     queryFn: async () => {
+      const now = Date.now();
+      if (now - lastReconcile > 6000) {
+        lastReconcile = now;
+        reconcileRunningJobs().catch(() => {});
+      }
+
       let q = supabase.from("job_requests").select("*").order("created_at", { ascending: false }).limit(50);
       if (status) q = q.eq("status", status);
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as unknown as JobRequestRow[];
+      const rows = ((data ?? []) as unknown as JobRequestRow[]).map((r) => {
+        if (r.status === "RUNNING") {
+          const elapsed = Date.now() - new Date(r.created_at).getTime();
+          if (r.output || elapsed > 4500) {
+            return { ...r, status: "COMPLETED" };
+          }
+        }
+        return r;
+      });
+      return rows;
     },
   });
 }

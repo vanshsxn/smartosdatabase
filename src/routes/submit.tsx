@@ -30,6 +30,19 @@ export const Route = createFileRoute("/submit")({
   component: SubmitPage,
 });
 
+const LANGUAGE_OPTIONS = [
+  { label: "Auto-Detect", value: "autodetect" },
+  { label: "English", value: "English" },
+  { label: "Hindi (हिंदी)", value: "Hindi" },
+  { label: "Spanish (Español)", value: "Spanish" },
+  { label: "French (Français)", value: "French" },
+  { label: "German (Deutsch)", value: "German" },
+  { label: "Japanese (日本語)", value: "Japanese" },
+  { label: "Chinese (中文)", value: "Chinese" },
+  { label: "Russian (Русский)", value: "Russian" },
+  { label: "Arabic (العربية)", value: "Arabic" },
+];
+
 function SubmitPage() {
   const qc = useQueryClient();
   const send = useServerFn(requestJob);
@@ -37,11 +50,19 @@ function SubmitPage() {
   const [name, setName] = useState(JOB_PRESETS[0]!.defaultName);
   const [priority, setPriority] = useState<JobPriority>("MEDIUM");
   const [input, setInput] = useState("");
+  const [sourceLang, setSourceLang] = useState("autodetect");
+  const [targetLang, setTargetLang] = useState("Hindi");
   const preset = JOB_PRESETS.find((p) => p.type === type) ?? JOB_PRESETS[0]!;
   const plan = resourcesFor(type, priority);
 
   const submit = useMutation({
-    mutationFn: () => send({ data: { name, type, priority, input: preset.ai ? input : undefined } }),
+    mutationFn: () => {
+      let formattedInput = input;
+      if (type === "AI_TRANSLATE" && input.trim()) {
+        formattedInput = `[Source: ${sourceLang} | Target: ${targetLang}]\n${input.trim()}`;
+      }
+      return send({ data: { name, type, priority, input: preset.ai ? formattedInput : undefined } });
+    },
     onSuccess: (r) => {
       if (r.auto) {
         if (r.status === "COMPLETED") {
@@ -103,11 +124,51 @@ function SubmitPage() {
                   {submit.isPending ? "Running…" : isAutoApproved(type, priority) ? "Run job" : "Submit for approval"}
                 </Button>
               </div>
+              {type === "AI_TRANSLATE" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:col-span-2 p-3 rounded-lg border border-primary/20 bg-primary/5">
+                  <Field label="Source Language">
+                    <Select value={sourceLang} onValueChange={setSourceLang}>
+                      <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {LANGUAGE_OPTIONS.map((l) => (
+                          <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Target Language">
+                    <Select value={targetLang} onValueChange={setTargetLang}>
+                      <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {LANGUAGE_OPTIONS.filter((l) => l.value !== "autodetect").map((l) => (
+                          <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+              )}
               {preset.ai && (
                 <div className="space-y-2 sm:col-span-2">
-                  <Label>{preset.ai.inputLabel}</Label>
+                  <Label>
+                    {type === "AI_TRANSLATE"
+                      ? `Text to translate (${sourceLang} ➔ ${targetLang})`
+                      : preset.ai.inputLabel}
+                  </Label>
                   {!preset.ai.image && <Input type="file" accept=".txt,.md,.csv,.json,.js,.ts,.py,.java,.cpp,.c,.go,.html,.css" onChange={(e) => onFile(e.target.files?.[0])} />}
-                  <Textarea rows={8} value={input} onChange={(e) => setInput(e.target.value)} placeholder={preset.ai.image ? "e.g. A futuristic data center at sunset, isometric style" : "Type, paste text or upload a file"} maxLength={40000} />
+                  <Textarea
+                    rows={type === "AI_TRANSLATE" ? 6 : 8}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder={
+                      preset.ai.image
+                        ? "e.g. A futuristic data center at sunset, isometric style"
+                        : type === "AI_TRANSLATE"
+                        ? "Enter or paste the text you want translated here..."
+                        : "Type, paste text or upload a file"
+                    }
+                    maxLength={40000}
+                  />
                 </div>
               )}
               <div className="rounded-md border border-border bg-muted/30 p-3 text-sm sm:col-span-2">
