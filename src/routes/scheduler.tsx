@@ -60,7 +60,6 @@ import { setEnginePaused, setPolicy } from "@/lib/engine";
 import { healthQuery, jobsQuery, metricsQuery, queuesQuery } from "@/lib/engine-queries";
 import type { Job, JobPriority } from "@/lib/engine.types";
 import { JOB_PRESETS, resourcesFor } from "@/lib/job-presets";
-import { requestJob } from "@/lib/job-requests.functions";
 import { useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/scheduler")({
