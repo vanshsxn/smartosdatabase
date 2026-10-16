@@ -23,6 +23,7 @@ export interface JobRequestRow {
   priority: string;
   cores: number;
   memory_mb: number;
+  estimated_ms?: number;
   estimated_credits: number;
   status: string;
   engine_job_id: number | null;
@@ -36,14 +37,40 @@ export function useJobRequests(status?: string) {
     queryKey: ["job-requests", status ?? "all"],
     refetchInterval: 3000,
     queryFn: async () => {
-      let q = supabase.from("job_requests").select("*").order("created_at", { ascending: false }).limit(50);
+      const selectFields = "id, tenant_id, email, name, type, priority, cores, memory_mb, estimated_ms, estimated_credits, status, engine_job_id, output, reason, created_at";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let data: any[] | null = null;
+      let q = supabase
+        .from("job_requests")
+        .select(selectFields)
+        .order("created_at", { ascending: false })
+        .limit(200);
       if (status) q = q.eq("status", status);
-      const { data, error } = await q;
-      if (error) throw error;
+
+      const res = await q;
+      if (!res.error && res.data) {
+        data = res.data;
+      } else {
+        // Fallback: If primary query fails (e.g. payload too large due to legacy base64 data),
+        // query WITHOUT output so jobs are ALWAYS displayed and NEVER disappear!
+        let fallbackQ = supabase
+          .from("job_requests")
+          .select("id, tenant_id, email, name, type, priority, cores, memory_mb, estimated_ms, estimated_credits, status, engine_job_id, reason, created_at")
+          .order("created_at", { ascending: false })
+          .limit(200);
+        if (status) fallbackQ = fallbackQ.eq("status", status);
+        const fallbackRes = await fallbackQ;
+        if (fallbackRes.error) {
+          throw fallbackRes.error;
+        }
+        data = fallbackRes.data;
+      }
+
       const rows = ((data ?? []) as unknown as JobRequestRow[]).map((r) => {
         if (r.status === "RUNNING") {
           const elapsed = Date.now() - new Date(r.created_at).getTime();
-          if (r.output || elapsed > 4500) {
+          const maxBurst = (r.estimated_ms || 3000) + 1500;
+          if (r.output || elapsed > maxBurst) {
             return { ...r, status: "COMPLETED" };
           }
         }
@@ -72,11 +99,37 @@ export function JobRequestList({ admin = false }: { admin?: boolean }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  if (rows.isError) {
+    return (
+      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+        Failed to load job requests: {(rows.error as Error)?.message || "Unknown error"}
+      </div>
+    );
+  }
+
+  if (rows.isLoading && !rows.data?.length) {
+    return <p className="text-sm text-muted-foreground animate-pulse">Loading jobs…</p>;
+  }
+
   if (!rows.data?.length) return <p className="text-sm text-muted-foreground">No job requests yet.</p>;
+
   return (
     <div className="space-y-3">
       {rows.data.map((r) => {
         const job = r.engine_job_id ? snapshot?.jobs.find((j) => j.id === r.engine_job_id) : undefined;
+        const outputStr =
+          typeof r.output === "string"
+            ? r.output
+            : r.output != null
+            ? JSON.stringify(r.output, null, 2)
+            : null;
+
+        const isImage =
+          !!outputStr &&
+          (outputStr.startsWith("data:image") ||
+            outputStr.startsWith("http://") ||
+            outputStr.startsWith("https://"));
+
         return (
           <div key={r.id} className="rounded-md border border-border p-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -103,16 +156,16 @@ export function JobRequestList({ admin = false }: { admin?: boolean }) {
             )}
             {r.reason && <p className="mt-1 text-xs text-destructive">{r.reason}</p>}
             {job && <LiveJob job={job} />}
-            {r.output && (r.output.startsWith("data:image") || r.output.startsWith("http://") || r.output.startsWith("https://")) ? (
+            {isImage ? (
               <div className="mt-2 space-y-1.5">
                 <img
-                  src={r.output}
+                  src={outputStr}
                   alt={r.name}
                   className="max-h-96 w-full max-w-lg rounded-lg border border-border object-contain bg-black/40 shadow-sm"
                   loading="lazy"
                 />
                 <a
-                  href={r.output}
+                  href={outputStr}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-block text-[11px] text-primary hover:underline font-medium"
@@ -120,9 +173,9 @@ export function JobRequestList({ admin = false }: { admin?: boolean }) {
                   View full image ↗
                 </a>
               </div>
-            ) : r.output && (
-              <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-xs font-mono">{r.output}</pre>
-            )}
+            ) : outputStr ? (
+              <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-xs font-mono">{outputStr}</pre>
+            ) : null}
           </div>
         );
       })}

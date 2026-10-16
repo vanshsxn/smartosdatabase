@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppLayout } from "@/components/AppLayout";
 import { PriorityText, StatusText, fmtMs, fmtTime } from "@/components/dashboard-bits";
+import { useJobRequests } from "@/components/JobRequests";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/table";
 import { cancelJob } from "@/lib/engine";
 import { jobsQuery } from "@/lib/engine-queries";
+import type { Job, JobPriority } from "@/lib/engine.types";
 import { tenantName, useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/jobs")({
@@ -51,6 +53,7 @@ function JobsPage() {
   const { tenantId } = useSession();
   const qc = useQueryClient();
   const jobs = useQuery(jobsQuery(tenantId));
+  const jobRequests = useJobRequests();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
 
@@ -63,13 +66,132 @@ function JobsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const rows = (jobs.data ?? []).filter((j) => {
+  // Merge engine in-memory jobs and persisted Supabase job_requests
+  const allJobs: Job[] = useMemo(() => {
+    const rawJobs: Job[] = [...(jobs.data ?? [])];
+    const existingEngineIds = new Set(rawJobs.map((j) => j.id));
+    const requests = jobRequests.data ?? [];
+    let fallbackCounter = 1;
+
+    for (const req of requests) {
+      if (req.engine_job_id && !existingEngineIds.has(req.engine_job_id)) {
+        let reqStatus: Job["status"] = "COMPLETED";
+        if (req.status === "COMPLETED") {
+          reqStatus = "COMPLETED";
+        } else if (req.status === "FAILED" || req.status === "DENIED") {
+          reqStatus = "FAILED";
+        } else if (req.status === "PENDING") {
+          reqStatus = "PENDING";
+        } else {
+          const elapsed = Date.now() - new Date(req.created_at).getTime();
+          const maxBurst = (req.estimated_ms || 3000) + 1500;
+          reqStatus = req.output || elapsed > maxBurst ? "COMPLETED" : "RUNNING";
+        }
+        const isDone = reqStatus === "COMPLETED" || reqStatus === "FAILED";
+        rawJobs.push({
+          id: req.engine_job_id,
+          externalId: req.id,
+          tenantId: req.tenant_id,
+          userId: req.email ?? "user",
+          name: req.name,
+          type: req.type,
+          priority: (req.priority as JobPriority) ?? "MEDIUM",
+          status: reqStatus,
+          requestedCores: req.cores,
+          requestedMemoryMb: req.memory_mb,
+          estimatedMs: req.estimated_ms || 3000,
+          remainingMs: isDone ? 0 : 3000,
+          cpuTimeUsedMs: isDone ? req.estimated_ms || 3000 : 0,
+          waitingMs: 0,
+          turnaroundMs: req.estimated_ms || 3000,
+          responseMs: 0,
+          queueLevel: 0,
+          contextSwitches: isDone ? 13 : 0,
+          preemptions: isDone ? 12 : 0,
+          memoryBase: 0,
+          lastScore: 1,
+          lastDecision:
+            reqStatus === "COMPLETED"
+              ? "Executed and completed on MLFQ scheduler"
+              : "Admitted by Long-Term Scheduler",
+          estimatedCredits: Number(req.estimated_credits),
+          creditsCharged: isDone ? Number(req.estimated_credits) : 0,
+          submittedAtMs: new Date(req.created_at).getTime(),
+          completedAtMs: isDone
+            ? new Date(req.created_at).getTime() + (req.estimated_ms || 3000)
+            : 0,
+          errorMessage: req.reason || "",
+        });
+      } else if (!req.engine_job_id) {
+        let reqStatus: Job["status"] = "COMPLETED";
+        if (req.status === "COMPLETED") {
+          reqStatus = "COMPLETED";
+        } else if (req.status === "FAILED" || req.status === "DENIED") {
+          reqStatus = "FAILED";
+        } else if (req.status === "PENDING") {
+          reqStatus = "PENDING";
+        } else {
+          const elapsed = Date.now() - new Date(req.created_at).getTime();
+          const maxBurst = (req.estimated_ms || 3000) + 1500;
+          reqStatus = req.output || elapsed > maxBurst ? "COMPLETED" : "RUNNING";
+        }
+        const isDone = reqStatus === "COMPLETED" || reqStatus === "FAILED";
+        rawJobs.push({
+          id: -(fallbackCounter++),
+          externalId: req.id,
+          tenantId: req.tenant_id,
+          userId: req.email ?? "user",
+          name: req.name,
+          type: req.type,
+          priority: (req.priority as JobPriority) ?? "MEDIUM",
+          status: reqStatus,
+          requestedCores: req.cores,
+          requestedMemoryMb: req.memory_mb,
+          estimatedMs: req.estimated_ms || 3000,
+          remainingMs: isDone ? 0 : 3000,
+          cpuTimeUsedMs: isDone ? req.estimated_ms || 3000 : 0,
+          waitingMs: 0,
+          turnaroundMs: req.estimated_ms || 3000,
+          responseMs: 0,
+          queueLevel: 0,
+          contextSwitches: isDone ? 13 : 0,
+          preemptions: isDone ? 12 : 0,
+          memoryBase: 0,
+          lastScore: 1,
+          lastDecision:
+            reqStatus === "COMPLETED"
+              ? "Executed and completed on MLFQ scheduler"
+              : reqStatus === "PENDING"
+              ? "Pending Admission Approval"
+              : "Admitted by Long-Term Scheduler",
+          estimatedCredits: Number(req.estimated_credits),
+          creditsCharged: isDone ? Number(req.estimated_credits) : 0,
+          submittedAtMs: new Date(req.created_at).getTime(),
+          completedAtMs: isDone
+            ? new Date(req.created_at).getTime() + (req.estimated_ms || 3000)
+            : 0,
+          errorMessage: req.reason || "",
+        });
+      }
+    }
+
+    // Sort newest first
+    rawJobs.sort((a, b) => (b.submittedAtMs || 0) - (a.submittedAtMs || 0));
+
+    if (tenantId) {
+      return rawJobs.filter((j) => j.tenantId === tenantId);
+    }
+    return rawJobs;
+  }, [jobs.data, jobRequests.data, tenantId]);
+
+  const rows = allJobs.filter((j) => {
     const matchStatus = status === "ALL" || j.status === status;
     const term = search.trim().toLowerCase();
     const matchTerm =
       !term ||
       j.name.toLowerCase().includes(term) ||
       String(j.id).includes(term) ||
+      (j.externalId && j.externalId.toLowerCase().includes(term)) ||
       j.type.toLowerCase().includes(term);
     return matchStatus && matchTerm;
   });
@@ -123,10 +245,15 @@ function JobsPage() {
             <TableBody>
               {rows.map((j) => {
                 const active = j.status === "QUEUED" || j.status === "RUNNING";
+                const displayId =
+                  j.id > 0
+                    ? `#${j.id}`
+                    : `#${j.externalId ? j.externalId.slice(0, 8) : Math.abs(j.id)}`;
+
                 return (
-                  <TableRow key={j.id}>
-                    <TableCell className="tabular-nums">{j.id}</TableCell>
-                    <TableCell>{j.name}</TableCell>
+                  <TableRow key={j.externalId || j.id}>
+                    <TableCell className="tabular-nums font-mono text-xs">{displayId}</TableCell>
+                    <TableCell className="font-medium">{j.name}</TableCell>
                     <TableCell>{tenantName(j.tenantId)}</TableCell>
                     <TableCell className="text-muted-foreground">{j.type}</TableCell>
                     <TableCell>
@@ -145,18 +272,22 @@ function JobsPage() {
                     </TableCell>
                     <TableCell>{fmtTime(j.submittedAtMs)}</TableCell>
                     <TableCell className="space-x-2 text-right whitespace-nowrap">
-                      <Link
-                        to="/logs"
-                        search={{ jobId: j.id }}
-                        className="text-sm text-primary hover:underline"
-                      >
-                        Logs
-                      </Link>
+                      {j.id > 0 ? (
+                        <Link
+                          to="/logs"
+                          search={{ jobId: j.id }}
+                          className="text-sm text-primary hover:underline"
+                        >
+                          Logs
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Persisted</span>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={!active || cancel.isPending}
-                        onClick={() => cancel.mutate(j.id)}
+                        disabled={!active || cancel.isPending || j.id <= 0}
+                        onClick={() => j.id > 0 && cancel.mutate(j.id)}
                       >
                         Cancel
                       </Button>

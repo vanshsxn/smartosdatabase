@@ -237,6 +237,7 @@ function SchedulerPage() {
     // Include pending and completed job_requests if they haven't synced to engine yet
     const existingEngineIds = new Set(rawJobs.map((j) => j.id));
     const requests = jobRequests.data ?? [];
+    let fallbackCounter = 1;
     for (const req of requests) {
       if (req.engine_job_id && !existingEngineIds.has(req.engine_job_id)) {
         let reqStatus: Job["status"] = "COMPLETED";
@@ -306,7 +307,7 @@ function SchedulerPage() {
         }
         const isDone = reqStatus === "COMPLETED" || reqStatus === "FAILED";
         rawJobs.push({
-          id: -Math.abs(req.id.split("-").reduce((acc, c) => acc + c.charCodeAt(0), 100)),
+          id: -(fallbackCounter++),
           externalId: req.id,
           tenantId: req.tenant_id,
           userId: req.email ?? "user",

@@ -560,17 +560,6 @@ export async function runImage(prompt: string): Promise<string> {
     const seed = Math.floor(Math.random() * 1000000);
     const encodedPrompt = encodeURIComponent(cleanPrompt);
     const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=768&seed=${seed}&nologo=true&model=flux`;
-
-    const imgRes = await fetch(imageUrl);
-    if (imgRes.ok) {
-      const arrayBuffer = await imgRes.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let binary = "";
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      return `data:image/jpeg;base64,${btoa(binary)}`;
-    }
     return imageUrl;
   } catch {
     return generateFallbackSvg(cleanPrompt);
