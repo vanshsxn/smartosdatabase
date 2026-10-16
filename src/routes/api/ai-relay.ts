@@ -13,7 +13,7 @@ export const Route = createFileRoute("/api/ai-relay")({
         if (!b || typeof b.input !== "string" || !b.input.trim()) return Response.json({ error: "Missing input" }, { status: 400 });
         const input = b.input.slice(0, 40000);
         try {
-          const { runAi, runImage } = await import("@/lib/job-requests.functions");
+          const { runAi, runImage } = await import("@/lib/job-workloads.server");
           const output = b.kind === "image"
             ? await runImage(input.slice(0, 4000))
             : await runAi(String(b.instructions ?? "Respond helpfully.").slice(0, 4000), input);

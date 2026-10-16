@@ -29,7 +29,7 @@ import { fmtMs } from "@/components/dashboard-bits";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { reconcileRunningJobs, requestJob } from "@/lib/job-requests.functions";
+import { requestJob } from "@/lib/job-requests.functions";
 import {
   Dialog,
   DialogContent,
@@ -205,15 +205,6 @@ function SchedulerPage() {
   const [pauseBeforeAdding, setPauseBeforeAdding] = useState(false);
 
   const sendJobRequest = useServerFn(requestJob);
-  const runReconcile = useServerFn(reconcileRunningJobs);
-
-  useEffect(() => {
-    runReconcile().catch(() => {});
-    const interval = setInterval(() => {
-      runReconcile().catch(() => {});
-    }, 7000);
-    return () => clearInterval(interval);
-  }, []);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["engine"] });
