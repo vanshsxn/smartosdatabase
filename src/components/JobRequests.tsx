@@ -94,10 +94,25 @@ export function JobRequestList({ admin = false }: { admin?: boolean }) {
             )}
             {r.reason && <p className="mt-1 text-xs text-destructive">{r.reason}</p>}
             {job && <LiveJob job={job} />}
-            {r.output?.startsWith("data:image") ? (
-              <img src={r.output} alt={r.name} className="mt-2 max-h-96 rounded border border-border" />
+            {r.output && (r.output.startsWith("data:image") || r.output.startsWith("http://") || r.output.startsWith("https://")) ? (
+              <div className="mt-2 space-y-1.5">
+                <img
+                  src={r.output}
+                  alt={r.name}
+                  className="max-h-96 w-full max-w-lg rounded-lg border border-border object-contain bg-black/40 shadow-sm"
+                  loading="lazy"
+                />
+                <a
+                  href={r.output}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block text-[11px] text-primary hover:underline font-medium"
+                >
+                  View full image ↗
+                </a>
+              </div>
             ) : r.output && (
-              <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-xs">{r.output}</pre>
+              <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-xs font-mono">{r.output}</pre>
             )}
           </div>
         );

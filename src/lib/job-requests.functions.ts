@@ -525,6 +525,9 @@ export async function runAi(instructions: string, input: string, jobType?: strin
 }
 
 export async function runImage(prompt: string): Promise<string> {
+  const cleanPrompt = (prompt || "futuristic landscape").trim().slice(0, 1000);
+
+  // 1. Lovable AI Gateway (if key configured)
   const key = process.env["LOVABLE_API_KEY"];
   if (key) {
     try {
@@ -534,7 +537,7 @@ export async function runImage(prompt: string): Promise<string> {
         body: JSON.stringify({
           model: "google/gemini-3.1-flash-image",
           modalities: ["image", "text"],
-          messages: [{ role: "user", content: prompt.slice(0, 4000) }],
+          messages: [{ role: "user", content: cleanPrompt }],
         }),
       });
       if (res.ok) {
@@ -547,14 +550,60 @@ export async function runImage(prompt: string): Promise<string> {
     }
   }
 
+  // 2. OpenAI DALL-E (if key configured)
+  const openaiKey = process.env["OPENAI_API_KEY"];
+  if (openaiKey) {
+    try {
+      const res = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "dall-e-3",
+          prompt: cleanPrompt,
+          n: 1,
+          size: "1024x1024",
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { data?: Array<{ url?: string; b64_json?: string }> };
+        const item = data?.data?.[0];
+        if (item?.url) return item.url;
+        if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
+  // 3. Custom AI Relay (if configured)
   if (process.env["AI_RELAY_URL"] && !process.env["AI_RELAY_URL"].includes("lovable.app")) {
     try {
-      const relayed = await relayAi({ kind: "image", input: prompt });
+      const relayed = await relayAi({ kind: "image", input: cleanPrompt });
       if (relayed) return relayed;
     } catch {
       // Fallback
     }
   }
 
-  return generateFallbackSvg(prompt);
+  // 4. Real AI Image Generation via Pollinations (Flux / SDXL model)
+  // Generates real, stunning photorealistic AI images directly from prompt
+  try {
+    const seed = Math.floor(Math.random() * 1000000);
+    const encodedPrompt = encodeURIComponent(cleanPrompt);
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=768&seed=${seed}&nologo=true&model=flux`;
+
+    const imgRes = await fetch(imageUrl);
+    if (imgRes.ok) {
+      const arrayBuffer = await imgRes.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return `data:image/jpeg;base64,${btoa(binary)}`;
+    }
+    return imageUrl;
+  } catch {
+    return generateFallbackSvg(cleanPrompt);
+  }
 }

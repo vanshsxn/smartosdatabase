@@ -9,7 +9,6 @@ export const Route = createFileRoute("/api/ai-relay")({
         const { resolveCaller } = await import("@/lib/engine-auth.server");
         const caller = await resolveCaller(request);
         if (!caller) return Response.json({ error: "Sign in required" }, { status: 401 });
-        if (!process.env["LOVABLE_API_KEY"]) return Response.json({ error: "AI is not configured" }, { status: 500 });
         const b = (await request.json().catch(() => null)) as { kind?: string; instructions?: string; input?: string } | null;
         if (!b || typeof b.input !== "string" || !b.input.trim()) return Response.json({ error: "Missing input" }, { status: 400 });
         const input = b.input.slice(0, 40000);
