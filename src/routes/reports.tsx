@@ -31,7 +31,7 @@ export const Route = createFileRoute("/reports")({
 });
 
 function ReportsPage() {
-  const { tenants, isAdmin } = useSession();
+  const { tenants, isAdmin, ownTenantId, tenantId, user } = useSession();
   const metrics = useQuery(metricsQuery);
   const reqs = useQuery({
     queryKey: ["reports-requests"],
@@ -46,7 +46,15 @@ function ReportsPage() {
       return data ?? [];
     },
   });
-  const list = reqs.data ?? [];
+  const rawList = reqs.data ?? [];
+  const list = isAdmin
+    ? rawList
+    : rawList.filter(
+        (j) =>
+          j.tenant_id === ownTenantId ||
+          (tenantId && j.tenant_id === tenantId) ||
+          (user?.email && j.email === user.email)
+      );
   const nameOf = (id: string) => tenants.find((t) => t.id === id)?.name ?? id;
   const charged = (r: (typeof list)[number]) =>
     ["RUNNING", "COMPLETED"].includes(r.status) ? Number(r.estimated_credits) : 0;
