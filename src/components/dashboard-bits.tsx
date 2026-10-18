@@ -71,12 +71,13 @@ export function Gauge({
           strokeWidth="10"
           strokeLinecap="round"
           strokeDasharray={`${(pct / 100) * circumference} ${circumference}`}
+          className="transition-all duration-700 ease-out"
         />
         <text
           x="55"
           y="52"
           textAnchor="middle"
-          className="fill-foreground text-[18px] font-semibold"
+          className="fill-foreground text-[18px] font-semibold transition-all duration-700 ease-out"
         >
           {pct.toFixed(0)}%
         </text>

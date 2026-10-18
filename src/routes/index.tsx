@@ -67,6 +67,7 @@ import { useEngineStream } from "@/lib/engine-stream";
 import { tenantName, useSession } from "@/lib/session";
 import { useJobRequests } from "@/components/JobRequests";
 import type { Job, JobPriority } from "@/lib/engine.types";
+import { useUsageHistory } from "@/lib/useUsageHistory";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -150,6 +151,18 @@ function DashboardPage() {
   const total = scopedRequests.length;
   const completedCount = scopedRequests.filter((req) => req.status === "COMPLETED").length;
   const runningCount = scopedRequests.filter((req) => req.status === "RUNNING").length;
+
+  const sample = useMemo(
+    () => ({
+      cpu: recentCpuPercent,
+      memory: recentRamPercent,
+      throughput: m?.throughputPerMin ?? 1.3,
+      running: runningCount,
+      queued: scopedRequests.filter((req) => req.status === "PENDING").length,
+    }),
+    [recentCpuPercent, recentRamPercent, m?.throughputPerMin, runningCount, scopedRequests]
+  );
+  const liveHistory = useUsageHistory(sample);
 
   const engineJobsMap = new Map((jobs.data ?? []).map((j) => [j.id, j]));
   let fallbackId = 1;
@@ -325,7 +338,21 @@ function DashboardPage() {
                 color="var(--color-chart-3)"
               />
             </div>
-            <div className="pt-2 border-t border-border/40 text-center">
+            <div className="pt-2 border-t border-border/40 space-y-1.5 text-center">
+              {runningCount > 0 ? (
+                <div className="flex items-center justify-center gap-2 text-xs text-blue-500 font-medium">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                  </span>
+                  <span>Executing process burst ({runningCount} active)</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-500 font-medium">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span>Dispatcher online · Ready for next job</span>
+                </div>
+              )}
               <p className="text-[11px] text-muted-foreground font-medium">
                 showing recent job analytics:{" "}
                 <span className="text-foreground font-semibold">
@@ -477,7 +504,7 @@ function DashboardPage() {
               height="100%"
             >
               <LineChart
-                data={history}
+                data={liveHistory}
                 margin={{
                   top: 5,
                   right: 10,
@@ -544,7 +571,7 @@ function DashboardPage() {
               height="100%"
             >
               <AreaChart
-                data={history}
+                data={liveHistory}
                 margin={{
                   top: 5,
                   right: 10,
