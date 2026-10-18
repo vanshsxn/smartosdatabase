@@ -468,37 +468,20 @@ function SchedulerPage() {
       {/* Interactive Process Flow Queue: [ P1 | P2 | P3 ... ] */}
       <Card className="border-border shadow-xs">
         <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <ListOrdered className="h-5 w-5 text-primary" />
-                <CardTitle className="text-base sm:text-lg">
-                  Process Admission & Dispatch Queue
-                </CardTitle>
-                <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">
-                  [ P1 | P2 | P3 ... ]
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Dynamic queue of admitted processes in execution pipeline. As jobs are admitted, they appear here. Click any process slot to inspect its PCB & state!
-              </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <ListOrdered className="h-5 w-5 text-primary" />
+              <CardTitle className="text-base sm:text-lg">
+                Process Admission & Dispatch Queue
+              </CardTitle>
+              <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">
+                [ P1 | P2 | P3 ... ]
+              </Badge>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                className="gap-1.5"
-                onClick={() => {
-                  const nextPIndex = allProcesses.length + 1;
-                  setCustomName(`job-p${nextPIndex}`);
-                  setAddDialogOpen(true);
-                }}
-              >
-                <Plus className="h-4 w-4" />
-                <span>Add Job (Admit P{allProcesses.length + 1})</span>
-              </Button>
+            <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={invalidate} className="gap-1.5">
                 <RefreshCw className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Refresh</span>
+                <span>Refresh</span>
               </Button>
             </div>
           </div>
@@ -634,27 +617,22 @@ function SchedulerPage() {
           </div>
 
           {/* Quick Metrics & Lifecycle Legend */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/40 text-[11px] text-muted-foreground">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                <b>{stateCounts.NEW}</b> New
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-cyan-500" />
-                <b>{stateCounts.READY}</b> Ready
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-blue-500" />
-                <b>{stateCounts.RUNNING}</b> Running
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <b>{stateCounts.TERMINATED}</b> Completed
-              </span>
-            </div>
-            <span className="italic">
-              💡 Click any slot <b>P1, P2, P3...</b> in the queue to inspect PCB & highlight in State Machine
+          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-border/40 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              <b>{stateCounts.NEW}</b> New
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-cyan-500" />
+              <b>{stateCounts.READY}</b> Ready
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-blue-500" />
+              <b>{stateCounts.RUNNING}</b> Running
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <b>{stateCounts.TERMINATED}</b> Completed
             </span>
           </div>
         </CardContent>

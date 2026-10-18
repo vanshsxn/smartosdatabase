@@ -3,9 +3,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Cpu, HardDrive, Layers, Users } from "lucide-react";
 import { useMemo } from "react";
 import {
-  Area,
-  AreaChart,
   CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -130,34 +131,41 @@ function ResourcesPage() {
           </CardHeader>
           <CardContent className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={history}>
+              <LineChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.4} />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="currentColor" />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="currentColor" />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="currentColor" unit="%" />
                 <Tooltip
+                  formatter={(val: any) => [`${val}%`]}
                   contentStyle={{
                     background: "var(--color-card)",
                     border: "1px solid var(--color-border)",
                     borderRadius: 8,
+                    fontSize: 12,
                   }}
                 />
-                <Area
+                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 6 }} />
+                <Line
                   type="monotone"
                   dataKey="cpu"
                   name="CPU %"
-                  stroke="var(--color-chart-1)"
-                  fill="var(--color-chart-1)"
-                  fillOpacity={0.18}
+                  stroke="#3b82f6"
+                  strokeWidth={2.5}
+                  dot={{ r: 2.5, fill: "#3b82f6" }}
+                  activeDot={{ r: 5 }}
+                  isAnimationActive={false}
                 />
-                <Area
+                <Line
                   type="monotone"
                   dataKey="memory"
                   name="Memory %"
-                  stroke="var(--color-chart-2)"
-                  fill="var(--color-chart-2)"
-                  fillOpacity={0.18}
+                  stroke="#10b981"
+                  strokeWidth={2.5}
+                  dot={{ r: 2.5, fill: "#10b981" }}
+                  activeDot={{ r: 5 }}
+                  isAnimationActive={false}
                 />
-              </AreaChart>
+              </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>

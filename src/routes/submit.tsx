@@ -43,6 +43,154 @@ const LANGUAGE_OPTIONS = [
   { label: "Arabic (العربية)", value: "Arabic" },
 ];
 
+function getAcceptedFileExtensions(jobType: string): string {
+  switch (jobType) {
+    case "AI_SUMMARIZE":
+      return ".docx,.doc,.pptx,.ppt,.pdf,.txt,.md,.csv,.tsv,README";
+    case "AI_CODE_REVIEW":
+      return ".html,.java,.py,.c,.cpp,.h,.hpp,.js,.jsx,.ts,.tsx,.xml,.json,.css,.go,.rs,.php,.sql,.sh,.yaml,.yml";
+    case "AI_TRANSLATE":
+      return ".pdf,.txt,.docx,.doc,.pptx,.ppt,.md";
+    case "REPORT":
+      return ".pptx,.ppt,.docx,.doc,.pdf,.txt,.md,.csv,.json,.html,.java,.py,.js,.ts";
+    case "AI_DATA_INSIGHTS":
+      return ".csv,.tsv,.txt,.json";
+    default:
+      return ".txt,.md,.csv,.json,.js,.ts,.py,.java,.cpp,.c,.go,.html,.css,.xml,.pdf,.docx,.doc,.pptx,.ppt";
+  }
+}
+
+function getFileTypeHint(jobType: string): string {
+  switch (jobType) {
+    case "AI_SUMMARIZE":
+      return "Word (.docx, .doc), PPT (.pptx, .ppt), PDF (.pdf), CSV, README (.md), TXT";
+    case "AI_CODE_REVIEW":
+      return "Coding files: Java, Python, C, C++, HTML, JS/TS, XML, CSS, Go, Rust, SQL, Shell";
+    case "AI_TRANSLATE":
+      return "PDF (.pdf), TXT (.txt), Word (.docx, .doc), PPT (.pptx, .ppt), Markdown (.md)";
+    case "REPORT":
+      return "PPT (.pptx), Word (.docx), PDF (.pdf), Code files, TXT, README, CSV";
+    case "AI_DATA_INSIGHTS":
+      return "CSV (.csv), TSV (.tsv), JSON (.json), TXT (.txt)";
+    default:
+      return "Text, PDF, Word, PPT, Code, or CSV files";
+  }
+}
+
+async function extractFileContent(f: File): Promise<string> {
+  const ext = f.name.slice(f.name.lastIndexOf(".")).toLowerCase();
+
+  // 1. Text / Code files / CSV / Markdown
+  if (
+    [
+      ".txt", ".md", ".csv", ".tsv", ".json", ".js", ".jsx", ".ts", ".tsx",
+      ".py", ".java", ".c", ".cpp", ".h", ".hpp", ".cs", ".go", ".rs",
+      ".php", ".html", ".css", ".xml", ".sql", ".sh", ".yaml", ".yml",
+    ].includes(ext) ||
+    f.name.toUpperCase().includes("README")
+  ) {
+    return await f.text();
+  }
+
+  // 2. Word documents (.docx) & PowerPoint presentations (.pptx)
+  if (ext === ".docx" || ext === ".pptx") {
+    try {
+      const buffer = await f.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      const view = new DataView(buffer);
+      let pos = 0;
+      let textContent = "";
+      const targets = ext === ".docx" ? ["document.xml"] : ["slide", "presentation.xml"];
+
+      while (pos < bytes.length - 30) {
+        if (view.getUint32(pos, true) !== 0x04034b50) {
+          pos++;
+          continue;
+        }
+        const compression = view.getUint16(pos + 8, true);
+        const compSize = view.getUint32(pos + 18, true);
+        const nameLen = view.getUint16(pos + 26, true);
+        const extraLen = view.getUint16(pos + 28, true);
+        const nameBytes = bytes.slice(pos + 30, pos + 30 + nameLen);
+        const fileName = new TextDecoder().decode(nameBytes);
+        const dataStart = pos + 30 + nameLen + extraLen;
+        const dataEnd = dataStart + compSize;
+
+        if (targets.some((t) => fileName.includes(t)) && dataEnd <= bytes.length) {
+          try {
+            const rawData = bytes.slice(dataStart, dataEnd);
+            let xml = "";
+            if (compression === 0) {
+              xml = new TextDecoder().decode(rawData);
+            } else if (compression === 8 && typeof DecompressionStream !== "undefined") {
+              const ds = new DecompressionStream("deflate-raw");
+              xml = await new Response(new Response(rawData).body.pipeThrough(ds)).text();
+            }
+            const matches =
+              xml.match(/<[^>]+:t[^>]*>([^<]+)<\/[^>]+:t>/g) || xml.match(/<t[^>]*>([^<]+)<\/t>/g) || [];
+            const extracted = matches
+              .map((m) => m.replace(/<[^>]+>/g, "").trim())
+              .filter(Boolean)
+              .join(" ");
+            if (extracted) {
+              textContent += (textContent ? "\n\n" : "") + extracted;
+            }
+          } catch {
+            // Continue parsing other zip blocks
+          }
+        }
+        pos = dataEnd > pos ? dataEnd : pos + 1;
+      }
+
+      if (textContent.trim()) {
+        return `[Document: ${f.name}]\n\n${textContent.trim()}`;
+      }
+    } catch {
+      // Fallback below
+    }
+  }
+
+  // 3. PDF Files (.pdf)
+  if (ext === ".pdf") {
+    try {
+      const buffer = await f.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const b64 = btoa(binary);
+
+      const rawText = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      const textMatches = rawText.match(/\(([^()]{3,})\)\s*T[jJ]/g) || [];
+      const extractedPreview = textMatches
+        .map((m) => m.replace(/^\(/, "").replace(/\)\s*T[jJ]$/, "").trim())
+        .filter((t) => t.length > 2)
+        .slice(0, 50)
+        .join(" ");
+
+      return `[PDF Document: ${f.name} (${(f.size / 1024).toFixed(1)} KB)]\n${
+        extractedPreview ? `Preview: ${extractedPreview}\n\n` : ""
+      }data:application/pdf;base64,${b64}`;
+    } catch {
+      // Fallback
+    }
+  }
+
+  // 4. Fallback for binary / legacy formats (.doc, .ppt, etc.): extract printable strings
+  try {
+    const raw = await f.text();
+    const clean = raw.replace(/[^\x20-\x7E\t\n\r]/g, " ").replace(/\s{2,}/g, " ").trim();
+    if (clean.length > 30) {
+      return `[File: ${f.name}]\n\n${clean.slice(0, 35000)}`;
+    }
+  } catch {
+    // Fallback
+  }
+
+  return `[File: ${f.name}]`;
+}
+
 function SubmitPage() {
   const qc = useQueryClient();
   const send = useServerFn(requestJob);
@@ -86,11 +234,18 @@ function SubmitPage() {
 
   const onFile = async (f?: File) => {
     if (!f) return;
-    if (f.size > 40000) {
-      toast.error("File too large (max 40 KB of text).");
+    if (f.size > 10 * 1024 * 1024) {
+      toast.error("File too large (max 10 MB).");
       return;
     }
-    setInput(await f.text());
+    const toastId = toast.loading(`Extracting content from ${f.name}…`);
+    try {
+      const content = await extractFileContent(f);
+      setInput(content.slice(0, 38000));
+      toast.success(`${f.name} loaded successfully!`, { id: toastId });
+    } catch (e) {
+      toast.error(`Could not read file: ${(e as Error).message}`, { id: toastId });
+    }
   };
 
   return (
@@ -155,7 +310,18 @@ function SubmitPage() {
                       ? `Text to translate (${sourceLang} ➔ ${targetLang})`
                       : preset.ai.inputLabel}
                   </Label>
-                  {!preset.ai.image && <Input type="file" accept=".txt,.md,.csv,.json,.js,.ts,.py,.java,.cpp,.c,.go,.html,.css" onChange={(e) => onFile(e.target.files?.[0])} />}
+                  {!preset.ai.image && (
+                    <div className="space-y-1.5">
+                      <Input
+                        type="file"
+                        accept={getAcceptedFileExtensions(type)}
+                        onChange={(e) => onFile(e.target.files?.[0])}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Supported: <span className="text-foreground/80 font-medium">{getFileTypeHint(type)}</span>
+                      </p>
+                    </div>
+                  )}
                   <Textarea
                     rows={type === "AI_TRANSLATE" ? 6 : 8}
                     value={input}
