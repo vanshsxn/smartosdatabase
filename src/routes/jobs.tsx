@@ -50,7 +50,7 @@ export const Route = createFileRoute("/jobs")({
 });
 
 function JobsPage() {
-  const { tenantId } = useSession();
+  const { tenantId, ownTenantId, isAdmin, user } = useSession();
   const qc = useQueryClient();
   const jobs = useQuery(jobsQuery(tenantId));
   const jobRequests = useJobRequests();
@@ -68,121 +68,77 @@ function JobsPage() {
 
   // Merge engine in-memory jobs and persisted Supabase job_requests
   const allJobs: Job[] = useMemo(() => {
-    const rawJobs: Job[] = [...(jobs.data ?? [])];
-    const existingEngineIds = new Set(rawJobs.map((j) => j.id));
-    const requests = jobRequests.data ?? [];
+    const rawJobs: Job[] = [];
+    const allReqs = jobRequests.data ?? [];
+    const requests = isAdmin
+      ? allReqs
+      : allReqs.filter(
+          (r) =>
+            r.tenant_id === ownTenantId ||
+            (tenantId && r.tenant_id === tenantId) ||
+            (user?.email && r.email === user.email)
+        );
+
+    const engineJobsMap = new Map((jobs.data ?? []).map((j) => [j.id, j]));
     let fallbackCounter = 1;
 
     for (const req of requests) {
-      if (req.engine_job_id && !existingEngineIds.has(req.engine_job_id)) {
-        let reqStatus: Job["status"] = "COMPLETED";
-        if (req.status === "COMPLETED") {
-          reqStatus = "COMPLETED";
-        } else if (req.status === "FAILED" || req.status === "DENIED") {
-          reqStatus = "FAILED";
-        } else if (req.status === "PENDING") {
-          reqStatus = "PENDING";
-        } else {
-          const elapsed = Date.now() - new Date(req.created_at).getTime();
-          const maxBurst = (req.estimated_ms || 3000) + 1500;
-          reqStatus = req.output || elapsed > maxBurst ? "COMPLETED" : "RUNNING";
-        }
-        const isDone = reqStatus === "COMPLETED" || reqStatus === "FAILED";
-        rawJobs.push({
-          id: req.engine_job_id,
-          externalId: req.id,
-          tenantId: req.tenant_id,
-          userId: req.email ?? "user",
-          name: req.name,
-          type: req.type,
-          priority: (req.priority as JobPriority) ?? "MEDIUM",
-          status: reqStatus,
-          requestedCores: req.cores,
-          requestedMemoryMb: req.memory_mb,
-          estimatedMs: req.estimated_ms || 3000,
-          remainingMs: isDone ? 0 : 3000,
-          cpuTimeUsedMs: isDone ? req.estimated_ms || 3000 : 0,
-          waitingMs: 0,
-          turnaroundMs: req.estimated_ms || 3000,
-          responseMs: 0,
-          queueLevel: 0,
-          contextSwitches: isDone ? 13 : 0,
-          preemptions: isDone ? 12 : 0,
-          memoryBase: 0,
-          lastScore: 1,
-          lastDecision:
-            reqStatus === "COMPLETED"
-              ? "Executed and completed on MLFQ scheduler"
-              : "Admitted by Long-Term Scheduler",
-          estimatedCredits: Number(req.estimated_credits),
-          creditsCharged: isDone ? Number(req.estimated_credits) : 0,
-          submittedAtMs: new Date(req.created_at).getTime(),
-          completedAtMs: isDone
-            ? new Date(req.created_at).getTime() + (req.estimated_ms || 3000)
-            : 0,
-          errorMessage: req.reason || "",
-        });
-      } else if (!req.engine_job_id) {
-        let reqStatus: Job["status"] = "COMPLETED";
-        if (req.status === "COMPLETED") {
-          reqStatus = "COMPLETED";
-        } else if (req.status === "FAILED" || req.status === "DENIED") {
-          reqStatus = "FAILED";
-        } else if (req.status === "PENDING") {
-          reqStatus = "PENDING";
-        } else {
-          const elapsed = Date.now() - new Date(req.created_at).getTime();
-          const maxBurst = (req.estimated_ms || 3000) + 1500;
-          reqStatus = req.output || elapsed > maxBurst ? "COMPLETED" : "RUNNING";
-        }
-        const isDone = reqStatus === "COMPLETED" || reqStatus === "FAILED";
-        rawJobs.push({
-          id: -(fallbackCounter++),
-          externalId: req.id,
-          tenantId: req.tenant_id,
-          userId: req.email ?? "user",
-          name: req.name,
-          type: req.type,
-          priority: (req.priority as JobPriority) ?? "MEDIUM",
-          status: reqStatus,
-          requestedCores: req.cores,
-          requestedMemoryMb: req.memory_mb,
-          estimatedMs: req.estimated_ms || 3000,
-          remainingMs: isDone ? 0 : 3000,
-          cpuTimeUsedMs: isDone ? req.estimated_ms || 3000 : 0,
-          waitingMs: 0,
-          turnaroundMs: req.estimated_ms || 3000,
-          responseMs: 0,
-          queueLevel: 0,
-          contextSwitches: isDone ? 13 : 0,
-          preemptions: isDone ? 12 : 0,
-          memoryBase: 0,
-          lastScore: 1,
-          lastDecision:
-            reqStatus === "COMPLETED"
-              ? "Executed and completed on MLFQ scheduler"
-              : reqStatus === "PENDING"
-              ? "Pending Admission Approval"
-              : "Admitted by Long-Term Scheduler",
-          estimatedCredits: Number(req.estimated_credits),
-          creditsCharged: isDone ? Number(req.estimated_credits) : 0,
-          submittedAtMs: new Date(req.created_at).getTime(),
-          completedAtMs: isDone
-            ? new Date(req.created_at).getTime() + (req.estimated_ms || 3000)
-            : 0,
-          errorMessage: req.reason || "",
-        });
+      const matchedEngineJob = req.engine_job_id ? engineJobsMap.get(req.engine_job_id) : undefined;
+      let reqStatus: Job["status"] = "COMPLETED";
+      if (req.status === "COMPLETED") {
+        reqStatus = "COMPLETED";
+      } else if (req.status === "FAILED" || req.status === "DENIED") {
+        reqStatus = "FAILED";
+      } else if (req.status === "PENDING") {
+        reqStatus = "PENDING";
+      } else {
+        const elapsed = Date.now() - new Date(req.created_at).getTime();
+        const maxBurst = (req.estimated_ms || 3000) + 1500;
+        reqStatus = req.output || elapsed > maxBurst ? "COMPLETED" : "RUNNING";
       }
+      const isDone = reqStatus === "COMPLETED" || reqStatus === "FAILED";
+      rawJobs.push({
+        id: req.engine_job_id ?? -(fallbackCounter++),
+        externalId: req.id,
+        tenantId: req.tenant_id,
+        userId: req.email ?? "user",
+        name: req.name,
+        type: req.type,
+        priority: (req.priority as JobPriority) ?? "MEDIUM",
+        status: matchedEngineJob ? matchedEngineJob.status : reqStatus,
+        requestedCores: req.cores,
+        requestedMemoryMb: req.memory_mb,
+        estimatedMs: req.estimated_ms || 3000,
+        remainingMs: matchedEngineJob ? matchedEngineJob.remainingMs : isDone ? 0 : 3000,
+        cpuTimeUsedMs: matchedEngineJob ? matchedEngineJob.cpuTimeUsedMs : isDone ? (req.estimated_ms || 3000) : 0,
+        waitingMs: matchedEngineJob?.waitingMs ?? 0,
+        turnaroundMs: matchedEngineJob?.turnaroundMs ?? (req.estimated_ms || 3000),
+        responseMs: matchedEngineJob?.responseMs ?? 0,
+        queueLevel: matchedEngineJob?.queueLevel ?? 0,
+        contextSwitches: matchedEngineJob?.contextSwitches ?? (isDone ? 13 : 0),
+        preemptions: matchedEngineJob?.preemptions ?? (isDone ? 12 : 0),
+        memoryBase: matchedEngineJob?.memoryBase ?? 0,
+        lastScore: 1,
+        lastDecision:
+          reqStatus === "COMPLETED"
+            ? "Executed and completed on MLFQ scheduler"
+            : reqStatus === "PENDING"
+            ? "Pending Admission Approval"
+            : "Admitted by Long-Term Scheduler",
+        estimatedCredits: Number(req.estimated_credits),
+        creditsCharged: isDone ? Number(req.estimated_credits) : 0,
+        submittedAtMs: new Date(req.created_at).getTime(),
+        completedAtMs: isDone
+          ? new Date(req.created_at).getTime() + (req.estimated_ms || 3000)
+          : 0,
+        errorMessage: req.reason || "",
+      });
     }
 
     // Sort newest first
     rawJobs.sort((a, b) => (b.submittedAtMs || 0) - (a.submittedAtMs || 0));
-
-    if (tenantId) {
-      return rawJobs.filter((j) => j.tenantId === tenantId);
-    }
     return rawJobs;
-  }, [jobs.data, jobRequests.data, tenantId]);
+  }, [jobs.data, jobRequests.data, isAdmin, ownTenantId, tenantId, user?.email]);
 
   const rows = allJobs.filter((j) => {
     const matchStatus = status === "ALL" || j.status === status;

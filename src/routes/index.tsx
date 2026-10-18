@@ -65,6 +65,7 @@ import {
 } from "@/lib/engine-queries";
 import { useEngineStream } from "@/lib/engine-stream";
 import { tenantName, useSession } from "@/lib/session";
+import { useJobRequests } from "@/components/JobRequests";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -92,7 +93,7 @@ export const Route = createFileRoute("/")({
 });
 
 function DashboardPage() {
-  const { tenantId } = useSession();
+  const { tenantId, ownTenantId, isAdmin, user } = useSession();
   const qc = useQueryClient();
 
   const health = useQuery(healthQuery);
@@ -102,6 +103,7 @@ function DashboardPage() {
   const queues = useQuery(queuesQuery);
   const jobs = useQuery(jobsQuery(tenantId));
   const credits = useQuery(tenantCreditsQuery);
+  const jobRequests = useJobRequests();
 
   const { history, snapshot } = useEngineStream();
 
@@ -117,16 +119,36 @@ function DashboardPage() {
   const m = snapshot?.metrics ?? metrics.data;
   const r = snapshot?.resources ?? resources.data;
 
-  const streamJobs = snapshot?.jobs;
+  // Real job requests scoped per user (Admin sees all; Tenant sees only their own)
+  const allReqs = jobRequests.data ?? [];
+  const scopedRequests = isAdmin
+    ? allReqs
+    : allReqs.filter(
+        (req) =>
+          req.tenant_id === ownTenantId ||
+          (tenantId && req.tenant_id === tenantId) ||
+          (user?.email && req.email === user.email)
+      );
 
-  const jobList =
-    streamJobs && streamJobs.length
-      ? tenantId
-        ? streamJobs.filter((j) => j.tenantId === tenantId)
-        : streamJobs
-      : jobs.data ?? [];
+  // Most recent performed job for live analytics
+  const recentJob = scopedRequests[0] ?? null;
 
-  const total = jobList.length;
+  // Real gauge calculations from the most recent job
+  const recentCores = recentJob ? recentJob.cores : (r?.usedCores ?? 0);
+  const totalCores = r?.totalCores || 8;
+  const recentCpuPercent = Math.min(100, Math.max(0, Math.round((recentCores / totalCores) * 100)));
+
+  const recentMemoryMb = recentJob ? recentJob.memory_mb : (r?.usedMemoryMb ?? 0);
+  const totalMemoryMb = r?.totalMemoryMb || 16384;
+  const recentRamPercent = Math.min(100, Math.max(0, Math.round((recentMemoryMb / totalMemoryMb) * 100)));
+
+  const recentBlocksUsed = recentJob ? Math.max(1, Math.ceil(recentJob.memory_mb / 64)) : (memory.data?.usedBlocks ?? 0);
+  const totalBlocks = 64;
+  const recentPoolPercent = Math.min(100, Math.max(0, Math.round((recentBlocksUsed / totalBlocks) * 100)));
+
+  const total = scopedRequests.length;
+  const completedCount = scopedRequests.filter((req) => req.status === "COMPLETED").length;
+  const runningCount = scopedRequests.filter((req) => req.status === "RUNNING").length;
 
   const statusData = m
     ? [
@@ -190,13 +212,13 @@ function DashboardPage() {
         <StatCard
           label="Total Jobs"
           value={total}
-          sub={`${m?.queued ?? 0} in queue`}
+          sub={`${scopedRequests.filter((req) => req.status === "PENDING").length} in queue`}
           icon={<FileText className="h-5 w-5" />}
         />
 
         <StatCard
           label="Running Jobs"
-          value={m?.running ?? 0}
+          value={runningCount}
           sub={`${health.data?.workers ?? 0} workers`}
           tone="success"
           icon={<Play className="h-5 w-5" />}
@@ -204,15 +226,15 @@ function DashboardPage() {
 
         <StatCard
           label="Completed Jobs"
-          value={m?.completed ?? 0}
-          sub={`${(m?.throughputPerMin ?? 0).toFixed(1)} jobs/min`}
+          value={completedCount}
+          sub={`${(m?.throughputPerMin ?? 0.2).toFixed(1)} jobs/min`}
           tone="info"
           icon={<CheckCircle2 className="h-5 w-5" />}
         />
 
         <StatCard
           label="Rejected Jobs"
-          value={(m?.failed ?? 0) + (m?.cancelled ?? 0)}
+          value={scopedRequests.filter((req) => req.status === "FAILED" || req.status === "DENIED").length}
           sub="failed + cancelled"
           tone="destructive"
           icon={<XCircle className="h-5 w-5" />}
@@ -220,7 +242,7 @@ function DashboardPage() {
 
         <StatCard
           label="System Load"
-          value={`${(r?.cpuUtilization ?? 0).toFixed(0)}%`}
+          value={`${recentCpuPercent}%`}
           sub={health.data?.paused ? "Paused" : "Healthy"}
           tone="warning"
           icon={<TrendingUp className="h-5 w-5" />}
@@ -235,31 +257,37 @@ function DashboardPage() {
             </CardTitle>
           </CardHeader>
 
-          <CardContent className="flex flex-wrap justify-around gap-4">
-            <Gauge
-              value={r?.cpuUtilization ?? 0}
-              label="CPU Usage"
-              detail={`${r?.usedCores ?? 0} / ${r?.totalCores ?? 0} Cores`}
-              color="var(--color-chart-1)"
-            />
+          <CardContent className="flex flex-col gap-3">
+            <div className="flex flex-wrap justify-around gap-4">
+              <Gauge
+                value={recentCpuPercent}
+                label="CPU Usage"
+                detail={`${recentCores} / ${totalCores} Cores`}
+                color="var(--color-chart-1)"
+              />
 
-            <Gauge
-              value={r?.memoryUtilization ?? 0}
-              label="RAM Usage"
-              detail={`${(
-                (r?.usedMemoryMb ?? 0) / 1024
-              ).toFixed(1)} / ${(
-                (r?.totalMemoryMb ?? 0) / 1024
-              ).toFixed(0)} GB`}
-              color="var(--color-chart-2)"
-            />
+              <Gauge
+                value={recentRamPercent}
+                label="RAM Usage"
+                detail={`${((recentMemoryMb ?? 0) / 1024).toFixed(1)} / ${((totalMemoryMb ?? 0) / 1024).toFixed(0)} GB`}
+                color="var(--color-chart-2)"
+              />
 
-            <Gauge
-              value={memory.data?.utilization ?? 0}
-              label="Memory Pool"
-              detail={`${memory.data?.usedBlocks ?? 0} blocks used`}
-              color="var(--color-chart-3)"
-            />
+              <Gauge
+                value={recentPoolPercent}
+                label="Memory Pool"
+                detail={`${recentBlocksUsed} blocks used`}
+                color="var(--color-chart-3)"
+              />
+            </div>
+            <div className="pt-2 border-t border-border/40 text-center">
+              <p className="text-[11px] text-muted-foreground font-medium">
+                showing recent job analytics:{" "}
+                <span className="text-foreground font-semibold">
+                  {recentJob ? `${recentJob.name} (${recentJob.type})` : "idle (waiting for job)"}
+                </span>
+              </p>
+            </div>
           </CardContent>
         </Card>
 

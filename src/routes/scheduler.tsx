@@ -188,7 +188,7 @@ function getLifecycleState(status: ProcessInfo["status"]): LifecycleState {
 
 function SchedulerPage() {
   const qc = useQueryClient();
-  const { isAdmin } = useSession();
+  const { isAdmin, ownTenantId, tenantId } = useSession();
   const health = useQuery(healthQuery);
   const metrics = useQuery(metricsQuery);
   const queues = useQuery(queuesQuery);
@@ -232,110 +232,64 @@ function SchedulerPage() {
 
   // Transform Jobs into Process Control Blocks (P1, P2, P3...)
   const { allProcesses, activeProcesses, jobIdToProcess } = useMemo(() => {
-    const rawJobs: Job[] = [...(jobs.data ?? [])];
+    const rawJobs: Job[] = [];
+    const allReqs = jobRequests.data ?? [];
+    const requests = isAdmin
+      ? allReqs
+      : allReqs.filter((r) => r.tenant_id === ownTenantId || (tenantId && r.tenant_id === tenantId));
 
-    // Include pending and completed job_requests if they haven't synced to engine yet
-    const existingEngineIds = new Set(rawJobs.map((j) => j.id));
-    const requests = jobRequests.data ?? [];
+    const engineJobsMap = new Map((jobs.data ?? []).map((j) => [j.id, j]));
     let fallbackCounter = 1;
-    for (const req of requests) {
-      if (req.engine_job_id && !existingEngineIds.has(req.engine_job_id)) {
-        let reqStatus: Job["status"] = "COMPLETED";
-        if (req.status === "COMPLETED") {
-          reqStatus = "COMPLETED";
-        } else if (req.status === "FAILED" || req.status === "DENIED") {
-          reqStatus = "FAILED";
-        } else if (req.status === "PENDING") {
-          reqStatus = "PENDING";
-        } else {
-          // If status is "RUNNING" in DB: check if output exists or if execution burst elapsed
-          const elapsed = Date.now() - new Date(req.created_at).getTime();
-          const maxBurst = (req.estimated_ms || 3000) + 2000;
-          if (req.output || elapsed > maxBurst) {
-            reqStatus = "COMPLETED";
-          } else {
-            reqStatus = "RUNNING";
-          }
-        }
 
-        const isDone = reqStatus === "COMPLETED" || reqStatus === "FAILED";
-        rawJobs.push({
-          id: req.engine_job_id,
-          externalId: req.id,
-          tenantId: req.tenant_id,
-          userId: req.email ?? "user",
-          name: req.name,
-          type: req.type,
-          priority: (req.priority as JobPriority) ?? "MEDIUM",
-          status: reqStatus,
-          requestedCores: req.cores,
-          requestedMemoryMb: req.memory_mb,
-          estimatedMs: req.estimated_ms || 3000,
-          remainingMs: isDone ? 0 : 3000,
-          cpuTimeUsedMs: reqStatus === "COMPLETED" ? (req.estimated_ms || 3000) : 0,
-          waitingMs: 0,
-          turnaroundMs: req.estimated_ms || 3000,
-          responseMs: 0,
-          queueLevel: 0,
-          contextSwitches: reqStatus === "COMPLETED" ? 13 : 0,
-          preemptions: reqStatus === "COMPLETED" ? 12 : 0,
-          memoryBase: 0,
-          lastScore: 1,
-          lastDecision: reqStatus === "COMPLETED" ? "Executed and completed on MLFQ scheduler" : "Admitted by Long-Term Scheduler",
-          estimatedCredits: Number(req.estimated_credits),
-          creditsCharged: Number(req.estimated_credits),
-          submittedAtMs: new Date(req.created_at).getTime(),
-          completedAtMs: reqStatus === "COMPLETED" ? new Date(req.created_at).getTime() + (req.estimated_ms || 3000) : 0,
-          errorMessage: req.reason || "",
-        });
-      } else if (!req.engine_job_id) {
-        let reqStatus: Job["status"] = "COMPLETED";
-        if (req.status === "COMPLETED") {
+    for (const req of requests) {
+      const matchedEngineJob = req.engine_job_id ? engineJobsMap.get(req.engine_job_id) : undefined;
+      let reqStatus: Job["status"] = "COMPLETED";
+      if (req.status === "COMPLETED") {
+        reqStatus = "COMPLETED";
+      } else if (req.status === "FAILED" || req.status === "DENIED") {
+        reqStatus = "FAILED";
+      } else if (req.status === "PENDING") {
+        reqStatus = "PENDING";
+      } else {
+        const elapsed = Date.now() - new Date(req.created_at).getTime();
+        const maxBurst = (req.estimated_ms || 3000) + 2000;
+        if (req.output || elapsed > maxBurst) {
           reqStatus = "COMPLETED";
-        } else if (req.status === "FAILED" || req.status === "DENIED") {
-          reqStatus = "FAILED";
-        } else if (req.status === "PENDING") {
-          reqStatus = "PENDING";
         } else {
-          const elapsed = Date.now() - new Date(req.created_at).getTime();
-          const maxBurst = (req.estimated_ms || 3000) + 2000;
-          if (req.output || elapsed > maxBurst) {
-            reqStatus = "COMPLETED";
-          } else {
-            reqStatus = "RUNNING";
-          }
+          reqStatus = "RUNNING";
         }
-        const isDone = reqStatus === "COMPLETED" || reqStatus === "FAILED";
-        rawJobs.push({
-          id: -(fallbackCounter++),
-          externalId: req.id,
-          tenantId: req.tenant_id,
-          userId: req.email ?? "user",
-          name: req.name,
-          type: req.type,
-          priority: (req.priority as JobPriority) ?? "MEDIUM",
-          status: reqStatus,
-          requestedCores: req.cores,
-          requestedMemoryMb: req.memory_mb,
-          estimatedMs: req.estimated_ms || 3000,
-          remainingMs: isDone ? 0 : 3000,
-          cpuTimeUsedMs: isDone ? (req.estimated_ms || 3000) : 0,
-          waitingMs: 0,
-          turnaroundMs: req.estimated_ms || 3000,
-          responseMs: 0,
-          queueLevel: 0,
-          contextSwitches: isDone ? 13 : 0,
-          preemptions: isDone ? 12 : 0,
-          memoryBase: 0,
-          lastScore: 1,
-          lastDecision: reqStatus === "COMPLETED" ? "Executed and completed on MLFQ scheduler" : reqStatus === "PENDING" ? "Pending Admission Approval" : "Admitted by Long-Term Scheduler",
-          estimatedCredits: Number(req.estimated_credits),
-          creditsCharged: isDone ? Number(req.estimated_credits) : 0,
-          submittedAtMs: new Date(req.created_at).getTime(),
-          completedAtMs: isDone ? new Date(req.created_at).getTime() + (req.estimated_ms || 3000) : 0,
-          errorMessage: req.reason || "",
-        });
       }
+
+      const isDone = reqStatus === "COMPLETED" || reqStatus === "FAILED";
+      rawJobs.push({
+        id: req.engine_job_id ?? -(fallbackCounter++),
+        externalId: req.id,
+        tenantId: req.tenant_id,
+        userId: req.email ?? "user",
+        name: req.name,
+        type: req.type,
+        priority: (req.priority as JobPriority) ?? "MEDIUM",
+        status: matchedEngineJob ? matchedEngineJob.status : reqStatus,
+        requestedCores: req.cores,
+        requestedMemoryMb: req.memory_mb,
+        estimatedMs: req.estimated_ms || 3000,
+        remainingMs: matchedEngineJob ? matchedEngineJob.remainingMs : isDone ? 0 : 3000,
+        cpuTimeUsedMs: matchedEngineJob ? matchedEngineJob.cpuTimeUsedMs : isDone ? (req.estimated_ms || 3000) : 0,
+        waitingMs: matchedEngineJob?.waitingMs ?? 0,
+        turnaroundMs: matchedEngineJob?.turnaroundMs ?? (req.estimated_ms || 3000),
+        responseMs: matchedEngineJob?.responseMs ?? 0,
+        queueLevel: matchedEngineJob?.queueLevel ?? 0,
+        contextSwitches: matchedEngineJob?.contextSwitches ?? (isDone ? 13 : 0),
+        preemptions: matchedEngineJob?.preemptions ?? (isDone ? 12 : 0),
+        memoryBase: matchedEngineJob?.memoryBase ?? 0,
+        lastScore: 1,
+        lastDecision: reqStatus === "COMPLETED" ? "Executed and completed on MLFQ scheduler" : reqStatus === "PENDING" ? "Pending Admission Approval" : "Admitted by Long-Term Scheduler",
+        estimatedCredits: Number(req.estimated_credits),
+        creditsCharged: isDone ? Number(req.estimated_credits) : 0,
+        submittedAtMs: new Date(req.created_at).getTime(),
+        completedAtMs: isDone ? new Date(req.created_at).getTime() + (req.estimated_ms || 3000) : 0,
+        errorMessage: req.reason || "",
+      });
     }
 
     // Sort chronologically by submission / ID to assign deterministic P1, P2, P3...

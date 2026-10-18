@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEngineStream } from "@/lib/engine-stream";
 import type { Job } from "@/lib/engine.types";
 import { decideJob } from "@/lib/job-requests.functions";
-import { tenantName } from "@/lib/session";
+import { tenantName, useSession } from "@/lib/session";
 
 export interface JobRequestRow {
   id: string;
@@ -86,6 +86,7 @@ const tone: Record<string, "default" | "secondary" | "destructive" | "outline"> 
 };
 
 export function JobRequestList({ admin = false }: { admin?: boolean }) {
+  const { user, isAdmin, ownTenantId, tenantId } = useSession();
   const rows = useJobRequests();
   const { snapshot } = useEngineStream();
   const qc = useQueryClient();
@@ -111,11 +112,22 @@ export function JobRequestList({ admin = false }: { admin?: boolean }) {
     return <p className="text-sm text-muted-foreground animate-pulse">Loading jobs…</p>;
   }
 
-  if (!rows.data?.length) return <p className="text-sm text-muted-foreground">No job requests yet.</p>;
+  // Tenant Isolation: Admins can see all jobs, while tenants ONLY see their own jobs
+  const allData = rows.data ?? [];
+  const filteredData = isAdmin
+    ? allData
+    : allData.filter(
+        (r) =>
+          r.tenant_id === ownTenantId ||
+          (tenantId && r.tenant_id === tenantId) ||
+          (user?.email && r.email === user.email)
+      );
+
+  if (!filteredData.length) return <p className="text-sm text-muted-foreground">No job requests yet.</p>;
 
   return (
     <div className="space-y-3">
-      {rows.data.map((r) => {
+      {filteredData.map((r) => {
         const job = r.engine_job_id ? snapshot?.jobs.find((j) => j.id === r.engine_job_id) : undefined;
         const outputStr =
           typeof r.output === "string"
@@ -129,6 +141,16 @@ export function JobRequestList({ admin = false }: { admin?: boolean }) {
           (outputStr.startsWith("data:image") ||
             outputStr.startsWith("http://") ||
             outputStr.startsWith("https://"));
+
+        // Admin Output Privacy Rule:
+        // Admin sees full output for Admin jobs.
+        // For jobs run by other tenants, Admin only sees job name & tenant name (output hidden for privacy).
+        // Tenants viewing their own jobs see full output.
+        const isRunByAdmin =
+          r.tenant_id === "tenant-admin" ||
+          (user?.email && r.email === user.email) ||
+          !r.tenant_id;
+        const canViewOutput = !isAdmin || isRunByAdmin;
 
         return (
           <div key={r.id} className="rounded-md border border-border p-3">
@@ -156,26 +178,36 @@ export function JobRequestList({ admin = false }: { admin?: boolean }) {
             )}
             {r.reason && <p className="mt-1 text-xs text-destructive">{r.reason}</p>}
             {job && <LiveJob job={job} />}
-            {isImage ? (
-              <div className="mt-2 space-y-1.5">
-                <img
-                  src={outputStr}
-                  alt={r.name}
-                  className="max-h-96 w-full max-w-lg rounded-lg border border-border object-contain bg-black/40 shadow-sm"
-                  loading="lazy"
-                />
-                <a
-                  href={outputStr}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-block text-[11px] text-primary hover:underline font-medium"
-                >
-                  View full image ↗
-                </a>
+
+            {canViewOutput ? (
+              isImage ? (
+                <div className="mt-2 space-y-1.5">
+                  <img
+                    src={outputStr}
+                    alt={r.name}
+                    className="max-h-96 w-full max-w-lg rounded-lg border border-border object-contain bg-black/40 shadow-sm"
+                    loading="lazy"
+                  />
+                  <a
+                    href={outputStr}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block text-[11px] text-primary hover:underline font-medium"
+                  >
+                    View full image ↗
+                  </a>
+                </div>
+              ) : outputStr ? (
+                <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-xs font-mono">{outputStr}</pre>
+              ) : null
+            ) : (
+              <div className="mt-2 rounded-md bg-muted/40 p-2 text-xs text-muted-foreground border border-border/50 flex flex-wrap items-center justify-between gap-1.5">
+                <span>
+                  Job <b>{r.name}</b> performed by <b>{tenantName(r.tenant_id)}</b> ({r.email ?? "tenant"})
+                </span>
+                <Badge variant="outline" className="text-[10px] bg-background">Output private to tenant</Badge>
               </div>
-            ) : outputStr ? (
-              <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-xs font-mono">{outputStr}</pre>
-            ) : null}
+            )}
           </div>
         );
       })}
