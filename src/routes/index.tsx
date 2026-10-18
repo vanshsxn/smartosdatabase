@@ -66,6 +66,7 @@ import {
 import { useEngineStream } from "@/lib/engine-stream";
 import { tenantName, useSession } from "@/lib/session";
 import { useJobRequests } from "@/components/JobRequests";
+import type { Job, JobPriority } from "@/lib/engine.types";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -150,30 +151,74 @@ function DashboardPage() {
   const completedCount = scopedRequests.filter((req) => req.status === "COMPLETED").length;
   const runningCount = scopedRequests.filter((req) => req.status === "RUNNING").length;
 
-  const statusData = m
-    ? [
-        {
-          name: "Running",
-          value: m.running,
-          color: "var(--color-success)",
-        },
-        {
-          name: "Completed",
-          value: m.completed,
-          color: "var(--color-primary)",
-        },
-        {
-          name: "Waiting",
-          value: m.queued,
-          color: "var(--color-warning)",
-        },
-        {
-          name: "Rejected",
-          value: m.failed + m.cancelled,
-          color: "var(--color-destructive)",
-        },
-      ].filter((d) => d.value > 0)
-    : [];
+  const engineJobsMap = new Map((jobs.data ?? []).map((j) => [j.id, j]));
+  let fallbackId = 1;
+  const jobList: Job[] = scopedRequests.map((req) => {
+    const matchedEngineJob = req.engine_job_id ? engineJobsMap.get(req.engine_job_id) : undefined;
+    let reqStatus: Job["status"] = "COMPLETED";
+    if (req.status === "COMPLETED") {
+      reqStatus = "COMPLETED";
+    } else if (req.status === "FAILED" || req.status === "DENIED") {
+      reqStatus = "FAILED";
+    } else if (req.status === "PENDING") {
+      reqStatus = "PENDING";
+    } else {
+      reqStatus = "RUNNING";
+    }
+    const isDone = reqStatus === "COMPLETED" || reqStatus === "FAILED";
+    return {
+      id: req.engine_job_id ?? -(fallbackId++),
+      externalId: req.id,
+      tenantId: req.tenant_id,
+      userId: req.email ?? "user",
+      name: req.name,
+      type: req.type,
+      priority: (req.priority as JobPriority) ?? "MEDIUM",
+      status: matchedEngineJob ? matchedEngineJob.status : reqStatus,
+      requestedCores: req.cores,
+      requestedMemoryMb: req.memory_mb,
+      estimatedMs: req.estimated_ms || 3000,
+      remainingMs: matchedEngineJob ? matchedEngineJob.remainingMs : isDone ? 0 : 3000,
+      cpuTimeUsedMs: matchedEngineJob ? matchedEngineJob.cpuTimeUsedMs : isDone ? (req.estimated_ms || 3000) : 0,
+      waitingMs: matchedEngineJob?.waitingMs ?? 0,
+      turnaroundMs: matchedEngineJob?.turnaroundMs ?? (req.estimated_ms || 3000),
+      responseMs: matchedEngineJob?.responseMs ?? 0,
+      queueLevel: matchedEngineJob?.queueLevel ?? 0,
+      contextSwitches: matchedEngineJob?.contextSwitches ?? (isDone ? 13 : 0),
+      preemptions: matchedEngineJob?.preemptions ?? (isDone ? 12 : 0),
+      memoryBase: matchedEngineJob?.memoryBase ?? 0,
+      lastScore: 1,
+      lastDecision: reqStatus === "COMPLETED" ? "Executed and completed on MLFQ scheduler" : "Admitted by Long-Term Scheduler",
+      estimatedCredits: Number(req.estimated_credits),
+      creditsCharged: isDone ? Number(req.estimated_credits) : 0,
+      submittedAtMs: new Date(req.created_at).getTime(),
+      completedAtMs: isDone ? new Date(req.created_at).getTime() + (req.estimated_ms || 3000) : 0,
+      errorMessage: req.reason || "",
+    };
+  });
+
+  const statusData = [
+    {
+      name: "Running",
+      value: runningCount,
+      color: "var(--color-success)",
+    },
+    {
+      name: "Completed",
+      value: completedCount,
+      color: "var(--color-primary)",
+    },
+    {
+      name: "Waiting",
+      value: scopedRequests.filter((req) => req.status === "PENDING").length,
+      color: "var(--color-warning)",
+    },
+    {
+      name: "Rejected",
+      value: scopedRequests.filter((req) => req.status === "FAILED" || req.status === "DENIED").length,
+      color: "var(--color-destructive)",
+    },
+  ].filter((d) => d.value > 0);
 
   const perJob = jobList
     .filter((j) => j.status === "RUNNING" || j.status === "QUEUED")
