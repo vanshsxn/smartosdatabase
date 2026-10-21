@@ -199,3 +199,4 @@ export function getCreditLedger(tenantId?: string): CreditTransaction[] {
   if (!tenantId) return localLedger.slice(0, 50);
   return localLedger.filter((t) => t.tenantId === tenantId).slice(0, 50);
 }
+

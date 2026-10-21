@@ -1267,37 +1267,6 @@ function SchedulerPage() {
               </div>
             </div>
           </div>
-              <div className="rounded border border-border/50 bg-background/80 p-2 space-y-0.5">
-                <div className="font-semibold text-foreground flex items-center gap-1">
-                  <ArrowRight className="h-3.5 w-3.5 text-primary" />
-                  <span>Admit (NEW ➔ READY):</span>
-                </div>
-                <p className="text-muted-foreground">
-                  Job Scheduler admits job, creates PCB, assigns Process ID (P1, P2...) and places in Level 0 (40ms).
-                </p>
-              </div>
-
-              <div className="rounded border border-border/50 bg-background/80 p-2 space-y-0.5">
-                <div className="font-semibold text-foreground flex items-center gap-1">
-                  <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
-                  <span>Dispatch ⇌ Preempt (READY ⇌ RUNNING):</span>
-                </div>
-                <p className="text-muted-foreground">
-                  Dispatcher assigns CPU. If burst &gt; quantum, timer interrupt preempts process back to READY (demoted to next MLFQ queue).
-                </p>
-              </div>
-
-              <div className="rounded border border-border/50 bg-background/80 p-2 space-y-0.5">
-                <div className="font-semibold text-foreground flex items-center gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                  <span>Exit (RUNNING ➔ TERMINATED):</span>
-                </div>
-                <p className="text-muted-foreground">
-                  CPU burst finishes. Resources deallocated, PCB archived, and turnaround time recorded.
-                </p>
-              </div>
-            </div>
-          </div>
 
           {/* Selected Process Live Inspector */}
           {selectedProcess ? (
