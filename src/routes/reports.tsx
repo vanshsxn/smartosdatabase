@@ -31,30 +31,27 @@ export const Route = createFileRoute("/reports")({
 });
 
 function ReportsPage() {
-  const { tenants, isAdmin, ownTenantId, tenantId, user } = useSession();
+  const { tenants, isAdmin, ownTenantId, tenantId } = useSession();
+  const effectiveTenant = ownTenantId || tenantId;
   const metrics = useQuery(metricsQuery);
   const reqs = useQuery({
-    queryKey: ["reports-requests"],
+    queryKey: ["reports-requests", effectiveTenant, isAdmin],
     refetchInterval: 5000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("job_requests")
         .select("id, tenant_id, email, name, type, status, estimated_credits, estimated_ms, created_at, decided_at")
         .order("created_at", { ascending: false })
         .limit(500);
+      if (!isAdmin && effectiveTenant) {
+        query = query.eq("tenant_id", effectiveTenant);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
   });
-  const rawList = reqs.data ?? [];
-  const list = isAdmin
-    ? rawList
-    : rawList.filter(
-        (j) =>
-          j.tenant_id === ownTenantId ||
-          (tenantId && j.tenant_id === tenantId) ||
-          (user?.email && j.email === user.email)
-      );
+  const list = reqs.data ?? [];
   const nameOf = (id: string) => tenants.find((t) => t.id === id)?.name ?? id;
   const charged = (r: (typeof list)[number]) =>
     ["RUNNING", "COMPLETED"].includes(r.status) ? Number(r.estimated_credits) : 0;
