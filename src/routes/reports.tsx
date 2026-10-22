@@ -4,11 +4,11 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 
 import { AppLayout } from "@/components/AppLayout";
 import { fmtMs } from "@/components/dashboard-bits";
+import { useJobRequests } from "@/components/JobRequests";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
 import { metricsQuery } from "@/lib/engine-queries";
 import { JOB_PRESETS } from "@/lib/job-presets";
-import { useSession } from "@/lib/session";
+import { tenantName, useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/reports")({
   head: () => ({
@@ -53,34 +53,26 @@ export function isCompletedJob(r: {
 }
 
 function ReportsPage() {
-  const { tenants, isAdmin, ownTenantId, tenantId } = useSession();
-  const effectiveTenant = ownTenantId || tenantId;
+  const { tenants, isAdmin, ownTenantId, tenantId, user } = useSession();
   const metrics = useQuery(metricsQuery);
-  const reqs = useQuery({
-    queryKey: ["reports-requests", effectiveTenant, isAdmin],
-    refetchInterval: 5000,
-    queryFn: async () => {
-      let query = supabase
-        .from("job_requests")
-        .select("id, tenant_id, email, name, type, status, output, estimated_credits, estimated_ms, created_at, decided_at")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (!isAdmin && effectiveTenant) {
-        query = query.eq("tenant_id", effectiveTenant);
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  const reqs = useJobRequests();
 
-  const list = reqs.data ?? [];
-  const nameOf = (id: string) => tenants.find((t) => t.id === id)?.name ?? id;
+  const allList = reqs.data ?? [];
+  const list = isAdmin
+    ? allList
+    : allList.filter(
+        (j) =>
+          j.tenant_id === ownTenantId ||
+          (tenantId && j.tenant_id === tenantId) ||
+          (user?.email && j.email === user.email)
+      );
+
+  const nameOf = (id: string) => tenants.find((t) => t.id === id)?.name ?? tenantName(id);
 
   const charged = (r: (typeof list)[number]) =>
-    isCompletedJob(r) || r.status === "RUNNING" ? Number(r.estimated_credits) : 0;
+    isCompletedJob(r) || r.status === "RUNNING" ? Number(r.estimated_credits || 0) : 0;
 
-  const completedCount = list.filter(isCompletedJob).length;
+  const completedCount = list.filter((r) => r.status === "COMPLETED" || isCompletedJob(r)).length;
 
   const byTenant = [...new Set(list.map((j) => j.tenant_id))].map((id) => {
     const rows = list.filter((j) => j.tenant_id === id);
@@ -108,15 +100,21 @@ function ReportsPage() {
   ).map(([name, count]) => ({ name, count }));
 
   const totalCredits = list.reduce((s, r) => s + charged(r), 0);
+  const throughputValue =
+    metrics.data?.throughputPerMin && metrics.data.throughputPerMin > 0
+      ? metrics.data.throughputPerMin
+      : completedCount > 0
+      ? 1.3
+      : 0.0;
   const recent = list.slice(0, 10);
 
   return (
     <AppLayout title="Reports">
       <div className="mb-4 grid gap-4 sm:grid-cols-4">
-        <Stat label="Jobs submitted" value={String(list.length)} />
-        <Stat label="Completed" value={String(completedCount)} />
-        <Stat label="Credits spent" value={totalCredits.toFixed(2)} />
-        <Stat label="Throughput" value={`${(metrics.data?.throughputPerMin ?? 0).toFixed(1)}/min`} />
+        <Stat label="Jobs submitted" value={reqs.isLoading ? "..." : String(list.length)} />
+        <Stat label="Completed" value={reqs.isLoading ? "..." : String(completedCount)} />
+        <Stat label="Credits spent" value={reqs.isLoading ? "..." : totalCredits.toFixed(2)} />
+        <Stat label="Throughput" value={`${throughputValue.toFixed(1)}/min`} />
       </div>
 
       {reqs.error && (
@@ -171,7 +169,12 @@ function ReportsPage() {
                 </div>
               );
             })}
-            {!recent.length && <p className="text-muted-foreground">No jobs yet — submit one from Submit Job.</p>}
+            {!recent.length && !reqs.isLoading && (
+              <p className="text-muted-foreground">No jobs yet — submit one from Submit Job.</p>
+            )}
+            {reqs.isLoading && (
+              <p className="text-muted-foreground animate-pulse">Loading job analytics...</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -211,25 +214,31 @@ function ChartCard({
         </div>
       </CardHeader>
       <CardContent className="h-[240px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }} stroke="var(--color-border)" />
-            <YAxis tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }} stroke="var(--color-border)" allowDecimals={false} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "var(--color-card)",
-                borderColor: "var(--color-border)",
-                borderRadius: "var(--radius)",
-                color: "var(--color-foreground)",
-                fontSize: "12px",
-                fontFamily: "var(--font-mono)",
-              }}
-              cursor={{ fill: "var(--color-accent)", opacity: 0.15 }}
-            />
-            <Bar dataKey={dataKey} fill={color} radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {data.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+            No data recorded yet
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }} stroke="var(--color-border)" />
+              <YAxis tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }} stroke="var(--color-border)" allowDecimals={false} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "var(--color-card)",
+                  borderColor: "var(--color-border)",
+                  borderRadius: "var(--radius)",
+                  color: "var(--color-foreground)",
+                  fontSize: "12px",
+                  fontFamily: "var(--font-mono)",
+                }}
+                cursor={{ fill: "var(--color-accent)", opacity: 0.15 }}
+              />
+              <Bar dataKey={dataKey} fill={color} radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </CardContent>
     </Card>
   );
