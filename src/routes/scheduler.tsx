@@ -933,340 +933,198 @@ function SchedulerPage() {
       {/* Feature Eight: Panel 2 - OS Process State Machine with 5 States */}
       {activePanel === "state-machine" && (
         <div className="space-y-4">
-      {/* NEW FEATURE: OS Process State Machine (Interactive Lifecycle Diagram) */}
-      <Card className="border-border">
-        <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <GitBranch className="h-5 w-5 text-primary" />
-                <CardTitle className="text-base sm:text-lg">
-                  OS Process State Machine (Interactive 5-State Lifecycle Diagram)
-                </CardTitle>
-                <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">
-                  5 Explicit States
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                OS process lifecycle: <b>NEW ➔ READY ⇌ RUNNING ⇌ WAITING (I/O) ➔ TERMINATED</b>. Select a process to highlight its active state!
-              </p>
-            </div>
+          <Card className="border-border">
+            <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-base sm:text-lg">
+                      OS Process State Machine
+                    </CardTitle>
+                    <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">
+                      5 States
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground font-mono font-medium">
+                    NEW → READY ⇌ RUNNING ⇌ WAITING → TERMINATED
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Select a process to highlight its current state.
+                  </p>
+                </div>
 
-            {/* Quick Process Selector Chips */}
-            {allProcesses.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] font-medium text-muted-foreground mr-1">Inspect Process:</span>
-                {allProcesses.length > 8 ? (
-                  <Select value={activeSelectedPid ?? undefined} onValueChange={setSelectedPid}>
-                    <SelectTrigger className="h-7 w-32 text-xs bg-background">
-                      <SelectValue placeholder="Pick PID" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {allProcesses.map((p) => (
-                        <SelectItem key={p.pid} value={p.pid} className="text-xs">
-                          {p.pid} ({p.jobName.slice(0, 14)}) · {p.status}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : null}
-                {allProcesses.slice(-8).map((p) => {
-                  const isSelected = p.pid === activeSelectedPid;
-                  return (
-                    <button
-                      key={p.pid}
-                      type="button"
-                      onClick={() => setSelectedPid(p.pid)}
-                      className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold transition-all cursor-pointer ${
-                        isSelected
-                          ? `${p.color.badge} shadow-xs ring-2 ring-primary ring-offset-2 scale-105`
-                          : "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border"
-                      }`}
-                    >
-                      <span>{p.pid}</span>
-                    </button>
-                  );
-                })}
+                {/* Quick Process Selector Chips */}
+                {allProcesses.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-muted-foreground mr-1">Inspect Process:</span>
+                    {allProcesses.length > 8 ? (
+                      <Select value={activeSelectedPid ?? undefined} onValueChange={setSelectedPid}>
+                        <SelectTrigger className="h-7 w-32 text-xs bg-background">
+                          <SelectValue placeholder="Pick PID" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allProcesses.map((p) => (
+                            <SelectItem key={p.pid} value={p.pid} className="text-xs">
+                              {p.pid} ({p.jobName.slice(0, 14)}) · {p.status}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : null}
+                    {allProcesses.slice(-8).map((p) => {
+                      const isSelected = p.pid === activeSelectedPid;
+                      return (
+                        <button
+                          key={p.pid}
+                          type="button"
+                          onClick={() => setSelectedPid(p.pid)}
+                          className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold transition-all cursor-pointer ${
+                            isSelected
+                              ? `${p.color.badge} shadow-xs ring-2 ring-primary ring-offset-2 scale-105`
+                              : "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border"
+                          }`}
+                        >
+                          <span>{p.pid}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </CardHeader>
+            </CardHeader>
 
-        <CardContent className="p-4 sm:p-6 space-y-6">
-          {/* Visual State Nodes & Transition Connectors (5 States) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3.5 items-stretch">
-            {/* 1. NEW STATE */}
-            <div
-              onClick={() => {
-                const p = allProcesses.slice().reverse().find((x) => getLifecycleState(x.status) === "NEW");
-                if (p) setSelectedPid(p.pid);
-              }}
-              className={`relative flex flex-col rounded-xl border p-4 transition-all duration-300 cursor-pointer ${
-                currentLifecycleState === "NEW"
-                  ? "ring-4 ring-amber-500/30 border-amber-500 bg-amber-500/10 shadow-md scale-102"
-                  : "border-border/70 bg-card/70 opacity-70 hover:opacity-100 hover:border-amber-500/50"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold">
-                    <FileText className="h-4 w-4" />
+            <CardContent className="p-4 sm:p-6 space-y-6">
+              {/* Visual State Nodes in single centered horizontal row on wide screens with arrows between states */}
+              <div className="flex flex-col lg:flex-row items-center justify-between gap-2 lg:gap-3 py-2">
+                {/* 1. NEW STATE */}
+                <div
+                  onClick={() => {
+                    const p = allProcesses.slice().reverse().find((x) => getLifecycleState(x.status) === "NEW");
+                    if (p) setSelectedPid(p.pid);
+                  }}
+                  className={`flex-1 w-full flex flex-col items-center justify-center rounded-2xl border p-4 transition-all duration-300 cursor-pointer ${
+                    currentLifecycleState === "NEW"
+                      ? "ring-4 ring-amber-500/30 border-amber-500 bg-amber-500/10 shadow-md scale-105"
+                      : "border-border/70 bg-card/70 opacity-80 hover:opacity-100 hover:border-amber-500/50"
+                  }`}
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20 text-amber-500 mb-2">
+                    <FileText className="h-5 w-5" />
                   </div>
                   <span className="font-bold text-sm tracking-wide text-foreground">NEW</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-700 dark:text-amber-300">
+                  <Badge variant="outline" className="mt-1 text-[10px] border-amber-500/30 text-amber-700 dark:text-amber-300">
                     {stateCounts.NEW} in pool
                   </Badge>
-                  {currentLifecycleState === "NEW" && (
-                    <Badge className="bg-amber-600 text-white text-[10px] animate-pulse">
-                      Active
-                    </Badge>
-                  )}
+                  <span className="mt-2 text-[11px] text-muted-foreground font-medium">Job Admission Pool</span>
                 </div>
-              </div>
-              <p className="mt-2 text-xs font-medium text-foreground">Job Admission Pool</p>
-              <p className="mt-1 text-[11px] text-muted-foreground leading-normal">
-                Job submitted. Long-Term Scheduler creates PCB structure and reserves memory base address.
-              </p>
-              {currentLifecycleState === "NEW" && selectedProcess ? (
-                <div className="mt-3 rounded bg-amber-500/20 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-200">
-                  📍 {selectedProcess.pid} ({selectedProcess.jobName}) is awaiting admission
-                </div>
-              ) : (
-                <span className="mt-3 block text-[10px] text-muted-foreground">Click to inspect NEW processes</span>
-              )}
-            </div>
 
-            {/* 2. READY STATE */}
-            <div
-              onClick={() => {
-                const p = allProcesses.slice().reverse().find((x) => getLifecycleState(x.status) === "READY");
-                if (p) setSelectedPid(p.pid);
-              }}
-              className={`relative flex flex-col rounded-xl border p-4 transition-all duration-300 cursor-pointer ${
-                currentLifecycleState === "READY"
-                  ? "ring-4 ring-blue-500/30 border-blue-500 bg-blue-500/10 shadow-md scale-102"
-                  : "border-border/70 bg-card/70 opacity-70 hover:opacity-100 hover:border-blue-500/50"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold">
-                    <Layers className="h-4 w-4" />
+                <div className="text-muted-foreground flex items-center justify-center shrink-0">
+                  <ArrowRight className="h-5 w-5 rotate-90 lg:rotate-0 text-primary" />
+                </div>
+
+                {/* 2. READY STATE */}
+                <div
+                  onClick={() => {
+                    const p = allProcesses.slice().reverse().find((x) => getLifecycleState(x.status) === "READY");
+                    if (p) setSelectedPid(p.pid);
+                  }}
+                  className={`flex-1 w-full flex flex-col items-center justify-center rounded-2xl border p-4 transition-all duration-300 cursor-pointer ${
+                    currentLifecycleState === "READY"
+                      ? "ring-4 ring-blue-500/30 border-blue-500 bg-blue-500/10 shadow-md scale-105"
+                      : "border-border/70 bg-card/70 opacity-80 hover:opacity-100 hover:border-blue-500/50"
+                  }`}
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/20 text-blue-500 mb-2">
+                    <Layers className="h-5 w-5" />
                   </div>
                   <span className="font-bold text-sm tracking-wide text-foreground">READY</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-700 dark:text-blue-300">
+                  <Badge variant="outline" className="mt-1 text-[10px] border-blue-500/30 text-blue-700 dark:text-blue-300">
                     {stateCounts.READY} ready
                   </Badge>
-                  {currentLifecycleState === "READY" && (
-                    <Badge className="bg-blue-600 text-white text-[10px] animate-pulse">
-                      Active
-                    </Badge>
-                  )}
+                  <span className="mt-2 text-[11px] text-muted-foreground font-medium">MLFQ Ready Queue</span>
                 </div>
-              </div>
-              <p className="mt-2 text-xs font-medium text-foreground">MLFQ Ready Queue</p>
-              <p className="mt-1 text-[11px] text-muted-foreground leading-normal">
-                PCB enqueued. Waiting in queue (Level 0 - 40ms) for Short-Term Scheduler dispatcher to assign CPU.
-              </p>
-              {currentLifecycleState === "READY" && selectedProcess ? (
-                <div className="mt-3 rounded bg-blue-500/20 px-2 py-1 text-[11px] font-semibold text-blue-800 dark:text-blue-200">
-                  📍 {selectedProcess.pid} is in Ready Queue (Level {selectedProcess.queueLevel})
-                </div>
-              ) : (
-                <span className="mt-3 block text-[10px] text-muted-foreground">Click to inspect READY queue</span>
-              )}
-            </div>
 
-            {/* 3. RUNNING STATE */}
-            <div
-              onClick={() => {
-                const p = allProcesses.slice().reverse().find((x) => getLifecycleState(x.status) === "RUNNING");
-                if (p) setSelectedPid(p.pid);
-              }}
-              className={`relative flex flex-col rounded-xl border p-4 transition-all duration-300 cursor-pointer ${
-                currentLifecycleState === "RUNNING"
-                  ? "ring-4 ring-emerald-500/30 border-emerald-500 bg-emerald-500/10 shadow-md scale-102"
-                  : "border-border/70 bg-card/70 opacity-70 hover:opacity-100 hover:border-emerald-500/50"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold">
-                    <Cpu className="h-4 w-4" />
+                <div className="text-muted-foreground flex items-center justify-center shrink-0 text-sm font-mono font-bold">
+                  <span className="hidden lg:inline text-amber-500">⇌</span>
+                  <span className="lg:hidden text-amber-500">⇅</span>
+                </div>
+
+                {/* 3. RUNNING STATE */}
+                <div
+                  onClick={() => {
+                    const p = allProcesses.slice().reverse().find((x) => getLifecycleState(x.status) === "RUNNING");
+                    if (p) setSelectedPid(p.pid);
+                  }}
+                  className={`flex-1 w-full flex flex-col items-center justify-center rounded-2xl border p-4 transition-all duration-300 cursor-pointer ${
+                    currentLifecycleState === "RUNNING"
+                      ? "ring-4 ring-emerald-500/30 border-emerald-500 bg-emerald-500/10 shadow-md scale-105"
+                      : "border-border/70 bg-card/70 opacity-80 hover:opacity-100 hover:border-emerald-500/50"
+                  }`}
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-500 mb-2">
+                    <Cpu className="h-5 w-5" />
                   </div>
                   <span className="font-bold text-sm tracking-wide text-foreground">RUNNING</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
+                  <Badge variant="outline" className="mt-1 text-[10px] border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
                     {stateCounts.RUNNING} active
                   </Badge>
-                  {currentLifecycleState === "RUNNING" && (
-                    <Badge className="bg-emerald-600 text-white text-[10px] animate-pulse">
-                      Executing in CPU
-                    </Badge>
-                  )}
+                  <span className="mt-2 text-[11px] text-muted-foreground font-medium">CPU Worker Core</span>
                 </div>
-              </div>
-              <p className="mt-2 text-xs font-medium text-foreground">CPU Worker Core</p>
-              <p className="mt-1 text-[11px] text-muted-foreground leading-normal">
-                Executing instructions on CPU. If quantum expires, preempts back to READY. If I/O blocks, transitions to WAITING.
-              </p>
-              {currentLifecycleState === "RUNNING" && selectedProcess ? (
-                <div className="mt-3 rounded bg-emerald-500/20 px-2 py-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-200">
-                  📍 {selectedProcess.pid} is running ({selectedProcess.quantumMs}ms time slice)
-                </div>
-              ) : (
-                <span className="mt-3 block text-[10px] text-muted-foreground">Click to inspect RUNNING core</span>
-              )}
-            </div>
 
-            {/* 4. WAITING STATE (Feature One) */}
-            <div
-              onClick={() => {
-                const p = allProcesses.slice().reverse().find((x) => getLifecycleState(x.status) === "WAITING");
-                if (p) setSelectedPid(p.pid);
-              }}
-              className={`relative flex flex-col rounded-xl border p-4 transition-all duration-300 cursor-pointer ${
-                currentLifecycleState === "WAITING"
-                  ? "ring-4 ring-purple-500/30 border-purple-500 bg-purple-500/10 shadow-md scale-102"
-                  : "border-border/70 bg-card/70 opacity-70 hover:opacity-100 hover:border-purple-500/50"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-400 font-bold">
-                    <Clock className="h-4 w-4" />
+                <div className="text-muted-foreground flex items-center justify-center shrink-0 text-sm font-mono font-bold">
+                  <span className="hidden lg:inline text-purple-500">⇌</span>
+                  <span className="lg:hidden text-purple-500">⇅</span>
+                </div>
+
+                {/* 4. WAITING STATE */}
+                <div
+                  onClick={() => {
+                    const p = allProcesses.slice().reverse().find((x) => getLifecycleState(x.status) === "WAITING");
+                    if (p) setSelectedPid(p.pid);
+                  }}
+                  className={`flex-1 w-full flex flex-col items-center justify-center rounded-2xl border p-4 transition-all duration-300 cursor-pointer ${
+                    currentLifecycleState === "WAITING"
+                      ? "ring-4 ring-purple-500/30 border-purple-500 bg-purple-500/10 shadow-md scale-105"
+                      : "border-border/70 bg-card/70 opacity-80 hover:opacity-100 hover:border-purple-500/50"
+                  }`}
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/20 text-purple-500 mb-2">
+                    <Clock className="h-5 w-5" />
                   </div>
                   <span className="font-bold text-sm tracking-wide text-foreground">WAITING</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Badge variant="outline" className="text-[10px] border-purple-500/30 text-purple-700 dark:text-purple-300">
+                  <Badge variant="outline" className="mt-1 text-[10px] border-purple-500/30 text-purple-700 dark:text-purple-300">
                     {stateCounts.WAITING} blocked
                   </Badge>
-                  {currentLifecycleState === "WAITING" && (
-                    <Badge className="bg-purple-600 text-white text-[10px] animate-pulse">
-                      I/O Wait
-                    </Badge>
-                  )}
+                  <span className="mt-2 text-[11px] text-muted-foreground font-medium">Blocked on I/O</span>
                 </div>
-              </div>
-              <p className="mt-2 text-xs font-medium text-foreground">Blocked Dependency / I/O</p>
-              <p className="mt-1 text-[11px] text-muted-foreground leading-normal">
-                Process yielded CPU to await external API response, network I/O, or resource event. Moves to READY once condition is satisfied.
-              </p>
-              {currentLifecycleState === "WAITING" && selectedProcess ? (
-                <div className="mt-3 rounded bg-purple-500/20 px-2 py-1 text-[11px] font-semibold text-purple-800 dark:text-purple-200">
-                  📍 {selectedProcess.pid} ({selectedProcess.jobName}) is blocked on I/O
-                </div>
-              ) : (
-                <span className="mt-3 block text-[10px] text-muted-foreground">Click to inspect WAITING processes</span>
-              )}
-            </div>
 
-            {/* 5. TERMINATED STATE */}
-            <div
-              onClick={() => {
-                const p = allProcesses.slice().reverse().find((x) => getLifecycleState(x.status) === "TERMINATED");
-                if (p) setSelectedPid(p.pid);
-              }}
-              className={`relative flex flex-col rounded-xl border p-4 transition-all duration-300 cursor-pointer ${
-                currentLifecycleState === "TERMINATED"
-                  ? "ring-4 ring-slate-500/30 border-slate-500 bg-slate-500/10 shadow-md scale-102"
-                  : "border-border/70 bg-card/70 opacity-70 hover:opacity-100 hover:border-slate-500/50"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/20 text-slate-600 dark:text-slate-400 font-bold">
-                    <CheckCircle2 className="h-4 w-4" />
+                <div className="text-muted-foreground flex items-center justify-center shrink-0">
+                  <ArrowRight className="h-5 w-5 rotate-90 lg:rotate-0 text-muted-foreground" />
+                </div>
+
+                {/* 5. TERMINATED STATE */}
+                <div
+                  onClick={() => {
+                    const p = allProcesses.slice().reverse().find((x) => getLifecycleState(x.status) === "TERMINATED");
+                    if (p) setSelectedPid(p.pid);
+                  }}
+                  className={`flex-1 w-full flex flex-col items-center justify-center rounded-2xl border p-4 transition-all duration-300 cursor-pointer ${
+                    currentLifecycleState === "TERMINATED"
+                      ? "ring-4 ring-slate-500/30 border-slate-500 bg-slate-500/10 shadow-md scale-105"
+                      : "border-border/70 bg-card/70 opacity-80 hover:opacity-100 hover:border-slate-500/50"
+                  }`}
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-500/20 text-slate-500 mb-2">
+                    <CheckCircle2 className="h-5 w-5" />
                   </div>
                   <span className="font-bold text-sm tracking-wide text-foreground">TERMINATED</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Badge variant="outline" className="text-[10px] border-slate-500/30 text-slate-700 dark:text-slate-300">
+                  <Badge variant="outline" className="mt-1 text-[10px] border-slate-500/30 text-slate-700 dark:text-slate-300">
                     {stateCounts.TERMINATED} finished
                   </Badge>
-                  {currentLifecycleState === "TERMINATED" && (
-                    <Badge className="bg-slate-700 text-white text-[10px]">Completed</Badge>
-                  )}
+                  <span className="mt-2 text-[11px] text-muted-foreground font-medium">Execution Finished</span>
                 </div>
               </div>
-              <p className="mt-2 text-xs font-medium text-foreground">Execution Finished</p>
-              <p className="mt-1 text-[11px] text-muted-foreground leading-normal">
-                Process finished with exit code 0 or failed. PCB and memory frames released; metrics saved to database.
-              </p>
-              {currentLifecycleState === "TERMINATED" && selectedProcess ? (
-                <div className="mt-3 rounded bg-slate-500/20 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:text-slate-200">
-                  📍 {selectedProcess.pid} finished execution ({selectedProcess.cpuTimeUsedMs}ms CPU time)
-                </div>
-              ) : (
-                <span className="mt-3 block text-[10px] text-muted-foreground">Click to inspect TERMINATED jobs</span>
-              )}
-            </div>
-          </div>
-
-          {/* Transition Legend / OS Flow Paths (5 States) */}
-          <div className="rounded-lg border border-border/70 bg-muted/30 p-3 sm:p-4 text-xs space-y-2">
-            <p className="font-semibold text-foreground text-xs uppercase tracking-wider flex items-center gap-1.5">
-              <Activity className="h-4 w-4 text-primary" />
-              <span>OS State Transition Rules (Interactive MLFQ 5-State Flow):</span>
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1 text-[11px]">
-              <div className="rounded border border-border/50 bg-background/80 p-2 space-y-0.5">
-                <div className="font-semibold text-foreground flex items-center gap-1">
-                  <ArrowRight className="h-3.5 w-3.5 text-primary" />
-                  <span>Admit (NEW ➔ READY):</span>
-                </div>
-                <p className="text-muted-foreground">
-                  Job Scheduler admits job, creates PCB, assigns Process ID (P1, P2...) and places in Level 0.
-                </p>
-              </div>
-
-              <div className="rounded border border-border/50 bg-background/80 p-2 space-y-0.5">
-                <div className="font-semibold text-foreground flex items-center gap-1">
-                  <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
-                  <span>Dispatch ⇌ Preempt (READY ⇌ RUNNING):</span>
-                </div>
-                <p className="text-muted-foreground">
-                  Dispatcher assigns CPU. If burst &gt; quantum, timer interrupt preempts process back to READY (demoted down).
-                </p>
-              </div>
-
-              <div className="rounded border border-border/50 bg-background/80 p-2 space-y-0.5">
-                <div className="font-semibold text-foreground flex items-center gap-1">
-                  <Pause className="h-3.5 w-3.5 text-purple-500" />
-                  <span>Block (RUNNING ➔ WAITING):</span>
-                </div>
-                <p className="text-muted-foreground">
-                  Process initiates I/O or blocks on external AI service API response. Relinquishes CPU worker core immediately.
-                </p>
-              </div>
-
-              <div className="rounded border border-border/50 bg-background/80 p-2 space-y-0.5">
-                <div className="font-semibold text-foreground flex items-center gap-1">
-                  <Play className="h-3.5 w-3.5 text-cyan-500" />
-                  <span>Wakeup (WAITING ➔ READY):</span>
-                </div>
-                <p className="text-muted-foreground">
-                  I/O event completed / dependency payload received. Process moves back to READY queue to resume scheduling.
-                </p>
-              </div>
-
-              <div className="rounded border border-border/50 bg-background/80 p-2 space-y-0.5 sm:col-span-2 lg:col-span-2">
-                <div className="font-semibold text-foreground flex items-center gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                  <span>Exit (RUNNING ➔ TERMINATED):</span>
-                </div>
-                <p className="text-muted-foreground">
-                  CPU burst finishes. Resources deallocated, PCB archived, and turnaround time recorded to database.
-                </p>
-              </div>
-            </div>
-          </div>
 
           {/* Selected Process Live Inspector */}
           {selectedProcess ? (

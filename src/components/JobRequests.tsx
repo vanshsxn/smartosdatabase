@@ -44,7 +44,7 @@ export function useJobRequests(status?: string) {
         .from("job_requests")
         .select(selectFields)
         .order("created_at", { ascending: false })
-        .limit(200);
+        .limit(500);
       if (status) q = q.eq("status", status);
 
       const res = await q;
@@ -57,7 +57,7 @@ export function useJobRequests(status?: string) {
           .from("job_requests")
           .select("id, tenant_id, email, name, type, priority, cores, memory_mb, estimated_ms, estimated_credits, status, engine_job_id, reason, created_at")
           .order("created_at", { ascending: false })
-          .limit(200);
+          .limit(500);
         if (status) fallbackQ = fallbackQ.eq("status", status);
         const fallbackRes = await fallbackQ;
         if (fallbackRes.error) {

@@ -97,10 +97,10 @@ export function RandomLetterSwap({
       onClick={onClick}
       aria-pressed={isActive}
       className={cn(
-        "group relative flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-200 cursor-pointer select-none",
+        "group relative flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-all duration-200 cursor-pointer select-none",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
         isActive
-          ? "bg-primary text-primary-foreground shadow-sm font-semibold scale-[1.02]"
+          ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]"
           : "bg-card text-muted-foreground hover:bg-muted/80 hover:text-foreground border border-border/70 hover:border-border",
         className
       )}
