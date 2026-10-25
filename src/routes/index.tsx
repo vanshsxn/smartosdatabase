@@ -8,7 +8,7 @@ import {
   TrendingUp,
   XCircle,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   Area,
   AreaChart,
@@ -29,7 +29,6 @@ import {
 import { toast } from "sonner";
 
 import { AppLayout } from "@/components/AppLayout";
-import SplashScreen from "@/components/SplashScreen";
 import {
   EngineOffline,
   Gauge,
@@ -96,7 +95,6 @@ export const Route = createFileRoute("/")({
 });
 
 function DashboardPage() {
-  const [showSplash, setShowSplash] = useState(true);
   const { tenantId, ownTenantId, isAdmin, user } = useSession();
   const qc = useQueryClient();
 
@@ -260,10 +258,6 @@ function DashboardPage() {
       (usedByTenant.get(j.tenantId) ?? 0) +
         (j.creditsCharged || 0),
     );
-  }
-
-  if (showSplash) {
-    return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
 
   return (
