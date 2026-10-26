@@ -123,7 +123,43 @@ const WAITING_TIME_DATA = [
   { processes: "10", rrFixed: 112, rrDynamic: 97, anAlgo: 75, rraps: 80 },
 ];
 
-// Round Robin Gantt Timeline Data (Image 3)
+// MLFQ (Multi-Level Feedback Queue) Timeline Data
+const MLFQ_GANTT_PROCESSES = [
+  { pid: "P1", arrival: 0, burst1: 4, io: 3, burst2: 5, initialQ: "Q0", transition: "Q0 → Q1 → I/O → Q0 (Boost)", type: "Compute Intensive" },
+  { pid: "P2", arrival: 0, burst1: 5, io: 4, burst2: 2, initialQ: "Q0", transition: "Q0 → Q1 → Q2 (Demoted)", type: "Batch Execution" },
+  { pid: "P3", arrival: 0, burst1: 3, io: 2, burst2: 3, initialQ: "Q0", transition: "Q0 → I/O Yield → Q0 (Retained)", type: "Interactive Task" },
+  { pid: "P4", arrival: 0, burst1: 2, io: 1, burst2: 4, initialQ: "Q0", transition: "Q0 → Finished Burst 1 → Q1", type: "Short Job" },
+];
+
+const MLFQ_TIMELINE_SLOTS = Array.from({ length: 28 }, (_, i) => i + 1);
+
+// States: "Q0" (Queue 0, quantum=2), "Q1" (Queue 1, quantum=4), "Q2" (Queue 2, FCFS), "I" (I/O), "W" (Waiting), "B" (Priority Boost)
+const MLFQ_P1_STATES = ["Q0","Q0","W","W","W","W","W","W","Q1","Q1","I","I","I","W","W","W","Q0","Q0","W","B","W","W","W","W","Q0","Q0","Q1","Q1"];
+const MLFQ_P2_STATES = ["W","W","Q0","Q0","W","W","W","W","W","W","Q1","Q1","Q1","I","I","I","I","W","W","B","Q0","Q0","W","W","W","W","W","W"];
+const MLFQ_P3_STATES = ["W","W","W","W","Q0","Q0","W","W","W","W","W","W","W","Q1","I","I","W","W","Q0","B","W","W","Q0","W","W","W","W","W"];
+const MLFQ_P4_STATES = ["W","W","W","W","W","W","Q0","Q0","I","W","W","W","W","W","Q0","Q0","W","W","W","B","W","W","W","Q0","Q0","W","W","W"];
+
+const MLFQ_CPU_GANTT = [
+  "P1(Q0)", "P1(Q0)", "P2(Q0)", "P2(Q0)", "P3(Q0)", "P3(Q0)", "P4(Q0)", "P4(Q0)",
+  "P1(Q1)", "P1(Q1)", "P2(Q1)", "P2(Q1)", "P2(Q1)", "P3(Q1)", "P4(Q0)", "P4(Q0)",
+  "P1(Q0)", "P1(Q0)", "P3(Q0)", "★BOOST", "P2(Q0)", "P2(Q0)", "P3(Q0)", "P4(Q0)",
+  "P1(Q0)", "P1(Q0)", "P1(Q1)", "P1(Q1)"
+];
+
+const MLFQ_QUEUE_DISPATCH = [
+  "Q0", "Q0", "Q0", "Q0", "Q0", "Q0", "Q0", "Q0",
+  "Q1", "Q1", "Q1", "Q1", "Q1", "Q1", "Q0", "Q0",
+  "Q0", "Q0", "Q0", "★", "Q0", "Q0", "Q0", "Q0",
+  "Q0", "Q0", "Q1", "Q1"
+];
+
+const MLFQ_IO_GANTT = [
+  "-", "-", "-", "-", "-", "-", "-", "-", "P4", "-",
+  "P1", "P1", "P1", "-", "P3", "P3", "P2", "P2", "P2", "P2",
+  "-", "-", "-", "-", "-", "-", "-", "-"
+];
+
+// Round Robin Gantt Timeline Data (Reference)
 const RR_GANTT_PROCESSES = [
   { pid: "P1", arrival: 0, burst1: 4, io: 3, burst2: 5 },
   { pid: "P2", arrival: 0, burst1: 5, io: 4, burst2: 2 },
@@ -145,6 +181,7 @@ const IO_GANTT = ["-","-","-","-","-","-","-","-","4","-","-","1","1","1","3","3
 
 function ReportsPage() {
   const { tenants, isAdmin, ownTenantId, tenantId, user } = useSession();
+  const [schedulerMode, setSchedulerMode] = useState<"mlfq" | "rr">("mlfq");
   const metrics = useQuery(metricsQuery);
   const resources = useQuery(resourcesQuery);
   const reqs = useJobRequests();
@@ -227,7 +264,7 @@ function ReportsPage() {
           </TabsTrigger>
           <TabsTrigger value="gantt-benchmarks" className="rounded-full text-xs gap-1.5 px-3.5">
             <Cpu className="h-3.5 w-3.5 text-amber-500" />
-            <span>Round Robin &amp; Benchmarks</span>
+            <span>MLFQ &amp; Benchmarks</span>
           </TabsTrigger>
           <TabsTrigger value="db-workload" className="rounded-full text-xs gap-1.5 px-3.5">
             <Database className="h-3.5 w-3.5 text-rose-500" />
@@ -395,136 +432,359 @@ function ReportsPage() {
 
         {/* TAB 3: ROUND ROBIN & BENCHMARKS (Image 3 & Image 4) */}
         <TabsContent value="gantt-benchmarks" className="space-y-4">
-          {/* Image 3: Round Robin Gantt Timeline */}
+          {/* MLFQ / Round Robin Gantt Timeline */}
           <Card className="border-border/70 bg-card/60">
             <CardHeader className="pb-3 border-b border-border/50">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <Cpu className="h-4 w-4 text-primary" />
-                    <span>Round Robin ( Time quantum = 2 units )</span>
-                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-base font-bold flex items-center gap-2">
+                      <Cpu className="h-4 w-4 text-primary" />
+                      <span>{schedulerMode === "mlfq" ? "Multi-Level Feedback Queue (MLFQ Engine)" : "Round Robin ( Time quantum = 2 units )"}</span>
+                    </CardTitle>
+                    <Badge variant="outline" className="text-[10px] font-mono text-primary border-primary/30 bg-primary/5">
+                      {schedulerMode === "mlfq" ? "3 Priority Levels + Aging" : "Single Queue (Fixed Slice)"}
+                    </Badge>
+                  </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Process timeline, CPU dispatch bursts, I/O wait slots, and execution preemption matrix.
+                    {schedulerMode === "mlfq"
+                      ? "Q0 (Quantum = 2 units, High Priority) • Q1 (Quantum = 4 units, Medium Priority) • Q2 (FCFS, Low Priority) • Boost at t=20"
+                      : "Process timeline, CPU dispatch bursts, I/O wait slots, and execution preemption matrix."}
                   </p>
                 </div>
-                <div className="flex items-center gap-3 text-xs font-mono">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded-sm bg-emerald-500" /> CPU Burst
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded-sm bg-amber-500" /> I/O Burst
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded-sm bg-muted-foreground/30" /> Ready/Waiting
-                  </span>
+
+                {/* View Switcher Toggle */}
+                <div className="flex items-center gap-1.5 bg-muted/40 p-1 rounded-full border border-border shrink-0 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setSchedulerMode("mlfq")}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                      schedulerMode === "mlfq"
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    MLFQ (Active Engine)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSchedulerMode("rr")}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                      schedulerMode === "rr"
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Round Robin
+                  </button>
                 </div>
+              </div>
+
+              {/* Legend */}
+              <div className="flex flex-wrap items-center gap-3 pt-2 text-xs font-mono border-t border-border/30 mt-2">
+                {schedulerMode === "mlfq" ? (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded-xs bg-emerald-500" /> Q0 Burst (Q=2u)
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded-xs bg-blue-500" /> Q1 Burst (Q=4u)
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded-xs bg-purple-500" /> Q2 Burst (FCFS)
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded-xs bg-amber-500" /> I/O Burst
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded-xs bg-rose-500" /> ★ Boost (Anti-Starvation)
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded-xs bg-muted-foreground/30" /> Ready/Waiting
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded-sm bg-emerald-500" /> CPU Burst
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded-sm bg-amber-500" /> I/O Burst
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded-sm bg-muted-foreground/30" /> Ready/Waiting
+                    </span>
+                  </>
+                )}
               </div>
             </CardHeader>
             <CardContent className="pt-4 space-y-4 overflow-x-auto">
-              {/* Process Specification Table */}
-              <div className="rounded-md border border-border overflow-hidden">
-                <table className="w-full text-xs font-mono text-center">
-                  <thead className="bg-primary/10 border-b border-border text-foreground font-semibold">
-                    <tr>
-                      <th className="py-2 px-3 text-left">Process</th>
-                      <th className="py-2 px-3">Arrival Time</th>
-                      <th className="py-2 px-3">CPU Burst</th>
-                      <th className="py-2 px-3">I/O Burst</th>
-                      <th className="py-2 px-3">CPU Burst</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {RR_GANTT_PROCESSES.map((row) => (
-                      <tr key={row.pid} className="hover:bg-muted/30">
-                        <td className="py-2 px-3 text-left font-bold text-foreground">{row.pid}</td>
-                        <td className="py-2 px-3">{row.arrival}</td>
-                        <td className="py-2 px-3 font-semibold text-emerald-600 dark:text-emerald-400">{row.burst1}</td>
-                        <td className="py-2 px-3 font-semibold text-amber-600 dark:text-amber-400">{row.io}</td>
-                        <td className="py-2 px-3 font-semibold text-emerald-600 dark:text-emerald-400">{row.burst2}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Process Gantt Chart Grid */}
-              <div className="space-y-1.5">
-                <h4 className="text-xs font-bold text-foreground font-mono">Process Gantt chart ( Time quantum = 2 units )</h4>
-                <div className="overflow-x-auto border border-border rounded-md p-2 bg-muted/10 font-mono text-[10px]">
-                  {/* Header unit numbers 1..28 */}
-                  <div className="flex gap-0.5 pb-1 border-b border-border/60">
-                    <div className="w-8 shrink-0 font-bold text-muted-foreground text-center">PID</div>
-                    {GANTT_TIMELINE_SLOTS.map((slot) => (
-                      <div key={slot} className="w-6 text-center text-muted-foreground shrink-0">{slot}</div>
-                    ))}
+              {schedulerMode === "mlfq" ? (
+                <>
+                  {/* MLFQ Process Specification Table */}
+                  <div className="rounded-md border border-border overflow-hidden">
+                    <table className="w-full text-xs font-mono text-center">
+                      <thead className="bg-primary/10 border-b border-border text-foreground font-semibold">
+                        <tr>
+                          <th className="py-2 px-3 text-left">Process</th>
+                          <th className="py-2 px-3">Arrival Time</th>
+                          <th className="py-2 px-3">CPU Burst 1</th>
+                          <th className="py-2 px-3">I/O Burst</th>
+                          <th className="py-2 px-3">Initial Queue</th>
+                          <th className="py-2 px-3 text-left">Feedback &amp; Demotion Behavior</th>
+                          <th className="py-2 px-3">CPU Burst 2</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {MLFQ_GANTT_PROCESSES.map((row) => (
+                          <tr key={row.pid} className="hover:bg-muted/30">
+                            <td className="py-2 px-3 text-left font-bold text-foreground">{row.pid}</td>
+                            <td className="py-2 px-3">{row.arrival}</td>
+                            <td className="py-2 px-3 font-semibold text-emerald-600 dark:text-emerald-400">{row.burst1}</td>
+                            <td className="py-2 px-3 font-semibold text-amber-600 dark:text-amber-400">{row.io}</td>
+                            <td className="py-2 px-3">
+                              <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                                {row.initialQ}
+                              </Badge>
+                            </td>
+                            <td className="py-2 px-3 text-left font-mono text-[11px] text-primary">{row.transition}</td>
+                            <td className="py-2 px-3 font-semibold text-blue-600 dark:text-blue-400">{row.burst2}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
 
-                  {/* Rows for P1 to P4 */}
-                  {[
-                    { pid: "P1", states: P1_STATES },
-                    { pid: "P2", states: P2_STATES },
-                    { pid: "P3", states: P3_STATES },
-                    { pid: "P4", states: P4_STATES },
-                  ].map((p) => (
-                    <div key={p.pid} className="flex gap-0.5 py-0.5 items-center">
-                      <div className="w-8 shrink-0 font-bold text-foreground text-center">{p.pid}</div>
-                      {p.states.map((st, idx) => (
-                        <div
-                          key={idx}
-                          className={`w-6 h-5 rounded-xs shrink-0 flex items-center justify-center font-bold text-[9px] ${
-                            st === "C"
-                              ? "bg-emerald-500 text-white"
-                              : st === "I"
-                              ? "bg-amber-500 text-white"
-                              : "bg-muted-foreground/20 text-muted-foreground"
-                          }`}
-                        >
-                          {st === "C" ? "" : st === "I" ? "" : ""}
+                  {/* MLFQ Process Gantt Chart Grid */}
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-bold text-foreground font-mono">
+                      Process Gantt chart ( MLFQ Priority Tiers: Q0 = 2 units, Q1 = 4 units )
+                    </h4>
+                    <div className="overflow-x-auto border border-border rounded-md p-2 bg-muted/10 font-mono text-[10px]">
+                      {/* Header unit numbers 1..28 */}
+                      <div className="flex gap-0.5 pb-1 border-b border-border/60">
+                        <div className="w-8 shrink-0 font-bold text-muted-foreground text-center">PID</div>
+                        {MLFQ_TIMELINE_SLOTS.map((slot) => (
+                          <div key={slot} className="w-6 text-center text-muted-foreground shrink-0">{slot}</div>
+                        ))}
+                      </div>
+
+                      {/* Rows for P1 to P4 */}
+                      {[
+                        { pid: "P1", states: MLFQ_P1_STATES },
+                        { pid: "P2", states: MLFQ_P2_STATES },
+                        { pid: "P3", states: MLFQ_P3_STATES },
+                        { pid: "P4", states: MLFQ_P4_STATES },
+                      ].map((p) => (
+                        <div key={p.pid} className="flex gap-0.5 py-0.5 items-center">
+                          <div className="w-8 shrink-0 font-bold text-foreground text-center">{p.pid}</div>
+                          {p.states.map((st, idx) => (
+                            <div
+                              key={idx}
+                              title={`${p.pid} at t=${idx + 1}: ${st}`}
+                              className={`w-6 h-5 rounded-xs shrink-0 flex items-center justify-center font-bold text-[8px] ${
+                                st === "Q0"
+                                  ? "bg-emerald-500 text-white"
+                                  : st === "Q1"
+                                  ? "bg-blue-500 text-white"
+                                  : st === "Q2"
+                                  ? "bg-purple-500 text-white"
+                                  : st === "I"
+                                  ? "bg-amber-500 text-white"
+                                  : st === "B"
+                                  ? "bg-rose-500 text-white"
+                                  : "bg-muted-foreground/20 text-muted-foreground"
+                              }`}
+                            >
+                              {st === "Q0" ? "Q0" : st === "Q1" ? "Q1" : st === "Q2" ? "Q2" : st === "I" ? "I" : st === "B" ? "★" : ""}
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* CPU Gantt Chart */}
-              <div className="space-y-1.5">
-                <h4 className="text-xs font-bold text-foreground font-mono">CPU Gantt chart ( Time quantum = 2 units )</h4>
-                <div className="overflow-x-auto border border-border rounded-md p-2 bg-muted/10 font-mono text-[10px]">
-                  <div className="flex gap-0.5">
-                    {CPU_GANTT.map((pid, idx) => (
-                      <div
-                        key={idx}
-                        className="w-6 h-6 rounded-xs shrink-0 flex items-center justify-center font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40"
-                      >
-                        {pid}
-                      </div>
-                    ))}
                   </div>
-                </div>
-              </div>
 
-              {/* I/O Gantt Chart */}
-              <div className="space-y-1.5">
-                <h4 className="text-xs font-bold text-foreground font-mono">I/O Gantt chart ( Time quantum = 2 units )</h4>
-                <div className="overflow-x-auto border border-border rounded-md p-2 bg-muted/10 font-mono text-[10px]">
-                  <div className="flex gap-0.5">
-                    {IO_GANTT.map((val, idx) => (
-                      <div
-                        key={idx}
-                        className={`w-6 h-6 rounded-xs shrink-0 flex items-center justify-center font-bold border ${
-                          val !== "-"
-                            ? "bg-amber-500 text-white border-amber-600"
-                            : "bg-muted/20 text-muted-foreground/30 border-border/40"
-                        }`}
-                      >
-                        {val !== "-" ? val : ""}
+                  {/* MLFQ CPU Gantt Chart */}
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-bold text-foreground font-mono">
+                      CPU Gantt chart ( Dispatched Process &amp; Queue Level )
+                    </h4>
+                    <div className="overflow-x-auto border border-border rounded-md p-2 bg-muted/10 font-mono text-[9px]">
+                      <div className="flex gap-0.5">
+                        {MLFQ_CPU_GANTT.map((label, idx) => (
+                          <div
+                            key={idx}
+                            title={`t=${idx + 1}: ${label}`}
+                            className={`w-6 h-6 rounded-xs shrink-0 flex items-center justify-center font-bold border ${
+                              label.includes("Q0")
+                                ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40"
+                                : label.includes("Q1")
+                                ? "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40"
+                                : label.includes("BOOST")
+                                ? "bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40"
+                                : "bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40"
+                            }`}
+                          >
+                            {label.includes("BOOST") ? "★" : label.split("(")[0]}
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
                   </div>
-                </div>
-              </div>
+
+                  {/* MLFQ Queue Level Timeline */}
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-bold text-foreground font-mono">
+                      Active Queue Level Dispatched ( Q0 vs Q1 vs Q2 vs Anti-Starvation Boost )
+                    </h4>
+                    <div className="overflow-x-auto border border-border rounded-md p-2 bg-muted/10 font-mono text-[9px]">
+                      <div className="flex gap-0.5">
+                        {MLFQ_QUEUE_DISPATCH.map((q, idx) => (
+                          <div
+                            key={idx}
+                            className={`w-6 h-6 rounded-xs shrink-0 flex items-center justify-center font-bold border ${
+                              q === "Q0"
+                                ? "bg-emerald-500 text-white border-emerald-600"
+                                : q === "Q1"
+                                ? "bg-blue-500 text-white border-blue-600"
+                                : q === "★"
+                                ? "bg-rose-500 text-white border-rose-600 animate-pulse"
+                                : "bg-purple-500 text-white border-purple-600"
+                            }`}
+                          >
+                            {q}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* MLFQ I/O Gantt Chart */}
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-bold text-foreground font-mono">I/O Wait Gantt chart</h4>
+                    <div className="overflow-x-auto border border-border rounded-md p-2 bg-muted/10 font-mono text-[10px]">
+                      <div className="flex gap-0.5">
+                        {MLFQ_IO_GANTT.map((val, idx) => (
+                          <div
+                            key={idx}
+                            className={`w-6 h-6 rounded-xs shrink-0 flex items-center justify-center font-bold border ${
+                              val !== "-"
+                                ? "bg-amber-500 text-white border-amber-600"
+                                : "bg-muted/20 text-muted-foreground/30 border-border/40"
+                            }`}
+                          >
+                            {val !== "-" ? val : ""}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Classic Round Robin Table */}
+                  <div className="rounded-md border border-border overflow-hidden">
+                    <table className="w-full text-xs font-mono text-center">
+                      <thead className="bg-primary/10 border-b border-border text-foreground font-semibold">
+                        <tr>
+                          <th className="py-2 px-3 text-left">Process</th>
+                          <th className="py-2 px-3">Arrival Time</th>
+                          <th className="py-2 px-3">CPU Burst</th>
+                          <th className="py-2 px-3">I/O Burst</th>
+                          <th className="py-2 px-3">CPU Burst</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {RR_GANTT_PROCESSES.map((row) => (
+                          <tr key={row.pid} className="hover:bg-muted/30">
+                            <td className="py-2 px-3 text-left font-bold text-foreground">{row.pid}</td>
+                            <td className="py-2 px-3">{row.arrival}</td>
+                            <td className="py-2 px-3 font-semibold text-emerald-600 dark:text-emerald-400">{row.burst1}</td>
+                            <td className="py-2 px-3 font-semibold text-amber-600 dark:text-amber-400">{row.io}</td>
+                            <td className="py-2 px-3 font-semibold text-emerald-600 dark:text-emerald-400">{row.burst2}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Classic Process Gantt Chart Grid */}
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-bold text-foreground font-mono">Process Gantt chart ( Time quantum = 2 units )</h4>
+                    <div className="overflow-x-auto border border-border rounded-md p-2 bg-muted/10 font-mono text-[10px]">
+                      <div className="flex gap-0.5 pb-1 border-b border-border/60">
+                        <div className="w-8 shrink-0 font-bold text-muted-foreground text-center">PID</div>
+                        {GANTT_TIMELINE_SLOTS.map((slot) => (
+                          <div key={slot} className="w-6 text-center text-muted-foreground shrink-0">{slot}</div>
+                        ))}
+                      </div>
+
+                      {[
+                        { pid: "P1", states: P1_STATES },
+                        { pid: "P2", states: P2_STATES },
+                        { pid: "P3", states: P3_STATES },
+                        { pid: "P4", states: P4_STATES },
+                      ].map((p) => (
+                        <div key={p.pid} className="flex gap-0.5 py-0.5 items-center">
+                          <div className="w-8 shrink-0 font-bold text-foreground text-center">{p.pid}</div>
+                          {p.states.map((st, idx) => (
+                            <div
+                              key={idx}
+                              className={`w-6 h-5 rounded-xs shrink-0 flex items-center justify-center font-bold text-[9px] ${
+                                st === "C"
+                                  ? "bg-emerald-500 text-white"
+                                  : st === "I"
+                                  ? "bg-amber-500 text-white"
+                                  : "bg-muted-foreground/20 text-muted-foreground"
+                              }`}
+                            >
+                              {st === "C" ? "" : st === "I" ? "" : ""}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Classic CPU Gantt Chart */}
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-bold text-foreground font-mono">CPU Gantt chart ( Time quantum = 2 units )</h4>
+                    <div className="overflow-x-auto border border-border rounded-md p-2 bg-muted/10 font-mono text-[10px]">
+                      <div className="flex gap-0.5">
+                        {CPU_GANTT.map((pid, idx) => (
+                          <div
+                            key={idx}
+                            className="w-6 h-6 rounded-xs shrink-0 flex items-center justify-center font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40"
+                          >
+                            {pid}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Classic I/O Gantt Chart */}
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-bold text-foreground font-mono">I/O Gantt chart ( Time quantum = 2 units )</h4>
+                    <div className="overflow-x-auto border border-border rounded-md p-2 bg-muted/10 font-mono text-[10px]">
+                      <div className="flex gap-0.5">
+                        {IO_GANTT.map((val, idx) => (
+                          <div
+                            key={idx}
+                            className={`w-6 h-6 rounded-xs shrink-0 flex items-center justify-center font-bold border ${
+                              val !== "-"
+                                ? "bg-amber-500 text-white border-amber-600"
+                                : "bg-muted/20 text-muted-foreground/30 border-border/40"
+                            }`}
+                          >
+                            {val !== "-" ? val : ""}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 

@@ -435,7 +435,7 @@ function SchedulerPage() {
     <AppLayout title="Scheduler">
       {/* Feature Eight: 7 Button-Based Navigation Controls using RandomLetterSwap */}
       <div className="space-y-3 mb-2">
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <RandomLetterSwap
             text="Job Queue"
             isActive={activePanel === "queue"}

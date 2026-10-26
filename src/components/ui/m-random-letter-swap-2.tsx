@@ -97,7 +97,7 @@ export function RandomLetterSwap({
       onClick={onClick}
       aria-pressed={isActive}
       className={cn(
-        "group relative flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-all duration-200 cursor-pointer select-none",
+        "group relative flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-semibold transition-all duration-200 cursor-pointer select-none shrink-0 whitespace-nowrap",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
         isActive
           ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]"
@@ -116,8 +116,8 @@ export function RandomLetterSwap({
           {icon}
         </span>
       )}
-      <span className="font-mono tracking-tight text-left truncate">{displayText}</span>
-      {badge && <span className="ml-auto shrink-0">{badge}</span>}
+      <span className="font-mono tracking-tight text-left whitespace-nowrap">{displayText}</span>
+      {badge && <span className="ml-1 shrink-0">{badge}</span>}
     </button>
   );
 }
