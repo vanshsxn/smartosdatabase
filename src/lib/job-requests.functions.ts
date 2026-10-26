@@ -7,6 +7,9 @@ const DEFAULT_CREDITS = 100;
 
 const UNLIMITED_TENANT = "tenant-admin";
 
+// Server-side in-memory idempotency cache for duplicate request suppression
+const processedJobIdempotencyKeys = new Map<string, { id: string; estimated: number; auto: boolean; status: string }>();
+
 // deno-lint-ignore no-explicit-any
 async function balanceOf(db: any, tenantId: string): Promise<number> {
   if (tenantId === UNLIMITED_TENANT) return Number.POSITIVE_INFINITY;
@@ -35,10 +38,16 @@ export const requestJob = createServerFn({ method: "POST" })
         runId: z.string().max(40).optional(),
         sha: z.string().max(60).optional(),
         branch: z.string().max(120).optional(),
+        idempotencyKey: z.string().max(100).optional(),
       })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    // 1. Check idempotency cache to strictly prevent duplicate job creation
+    if (data.idempotencyKey && processedJobIdempotencyKeys.has(data.idempotencyKey)) {
+      return processedJobIdempotencyKeys.get(data.idempotencyKey)!;
+    }
+
     const _u = await (await import("@/lib/engine-auth.server")).userDbFromRequest();
     const ctx = { supabase: _u.db, userId: _u.userId as string };
     const preset = JOB_PRESETS.find((p) => p.type === data.type);
@@ -71,12 +80,22 @@ export const requestJob = createServerFn({ method: "POST" })
         status: "PENDING_APPROVAL", request_id: row.id,
       });
     }
+    let result: { id: string; estimated: number; auto: boolean; status: string };
     if (isAutoApproved(data.type, data.priority)) {
       const { data: req } = await db.from("job_requests").select("*").eq("id", row.id).single();
       const r = await executeRequest(db, req, "Auto-approved (small job)");
-      return { id: row.id as string, estimated: est, auto: true, status: r.status };
+      result = { id: row.id as string, estimated: est, auto: true, status: r.status };
+    } else {
+      result = { id: row.id as string, estimated: est, auto: false, status: "PENDING" };
     }
-    return { id: row.id as string, estimated: est, auto: false, status: "PENDING" };
+
+    if (data.idempotencyKey) {
+      processedJobIdempotencyKeys.set(data.idempotencyKey, result);
+      // Evict after 5 minutes to prevent memory leak
+      setTimeout(() => processedJobIdempotencyKeys.delete(data.idempotencyKey!), 5 * 60 * 1000);
+    }
+
+    return result;
   });
 
 /** Admin approves (charges credits, runs on the engine) or denies a request. */

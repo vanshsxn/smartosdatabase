@@ -33,7 +33,7 @@ export interface JobRequestRow {
 }
 
 export function useJobRequests(status?: string) {
-  return useQuery({
+  return useQuery<JobRequestRow[]>({
     queryKey: ["job-requests", status ?? "all"],
     refetchInterval: 3000,
     queryFn: async () => {
@@ -108,7 +108,8 @@ export function JobRequestList({ admin = false }: { admin?: boolean }) {
     );
   }
 
-  if (rows.isLoading && !rows.data?.length) {
+  const hasData = Array.isArray(rows.data) && rows.data.length > 0;
+  if (rows.isLoading && !hasData) {
     return <p className="text-sm text-muted-foreground animate-pulse">Loading jobs…</p>;
   }
 

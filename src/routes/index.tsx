@@ -8,7 +8,7 @@ import {
   TrendingUp,
   XCircle,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -106,6 +106,7 @@ function DashboardPage() {
   const jobs = useQuery(jobsQuery(tenantId));
   const credits = useQuery(tenantCreditsQuery);
   const jobRequests = useJobRequests();
+  const [zoomScale, setZoomScale] = useState(true);
 
   const { history, snapshot } = useEngineStream();
 
@@ -490,12 +491,20 @@ function DashboardPage() {
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              CPU &amp; RAM Usage{" "}
-              <span className="text-muted-foreground">
-                (live)
-              </span>
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <span>CPU &amp; RAM Usage</span>
+                <span className="text-xs text-muted-foreground font-normal">(live telemetry)</span>
+              </CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px] rounded-full px-2.5 font-mono"
+                onClick={() => setZoomScale(!zoomScale)}
+              >
+                {zoomScale ? "Scale: Zoomed (0–25%)" : "Scale: Full (0–100%)"}
+              </Button>
+            </div>
           </CardHeader>
 
           <CardContent className="h-[260px]">
@@ -513,7 +522,9 @@ function DashboardPage() {
                 }}
               >
                 <CartesianGrid
+                  strokeDasharray="3 3"
                   stroke="var(--color-border)"
+                  opacity={0.3}
                   vertical={false}
                 />
 
@@ -524,7 +535,7 @@ function DashboardPage() {
                 />
 
                 <YAxis
-                  domain={[0, 100]}
+                  domain={[0, zoomScale ? 25 : 100]}
                   unit="%"
                   tick={axisTick}
                   width={44}
@@ -538,9 +549,9 @@ function DashboardPage() {
                   type="monotone"
                   dataKey="cpu"
                   name="CPU Usage (%)"
-                  stroke="var(--color-chart-1)"
+                  stroke="#1e9df1"
                   dot={false}
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                   isAnimationActive={false}
                 />
 
@@ -548,9 +559,9 @@ function DashboardPage() {
                   type="monotone"
                   dataKey="memory"
                   name="RAM Usage (%)"
-                  stroke="var(--color-chart-2)"
+                  stroke="#00b87a"
                   dot={false}
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                   isAnimationActive={false}
                 />
               </LineChart>

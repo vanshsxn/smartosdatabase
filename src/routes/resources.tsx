@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Cpu, HardDrive, Layers, Users } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -15,6 +15,7 @@ import {
 
 import { AppLayout } from "@/components/AppLayout";
 import { Gauge, StatCard } from "@/components/dashboard-bits";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -48,6 +49,7 @@ export const Route = createFileRoute("/resources")({
 });
 
 function ResourcesPage() {
+  const [zoomScale, setZoomScale] = useState(true);
   const resources = useQuery(resourcesQuery);
   const memory = useQuery(memoryQuery);
   const metrics = useQuery(metricsQuery);
@@ -127,14 +129,24 @@ function ResourcesPage() {
 
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">CPU &amp; memory over time</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">CPU &amp; Memory Over Time</CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px] rounded-full px-2.5 font-mono"
+                onClick={() => setZoomScale(!zoomScale)}
+              >
+                {zoomScale ? "Scale: Zoomed (0–25%)" : "Scale: Full (0–100%)"}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.4} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="currentColor" />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="currentColor" unit="%" />
+                <YAxis domain={[0, zoomScale ? 25 : 100]} tick={{ fontSize: 11 }} stroke="currentColor" unit="%" />
                 <Tooltip
                   formatter={(val: any) => [`${val}%`]}
                   contentStyle={{
@@ -149,9 +161,9 @@ function ResourcesPage() {
                   type="monotone"
                   dataKey="cpu"
                   name="CPU %"
-                  stroke="#3b82f6"
+                  stroke="#1e9df1"
                   strokeWidth={2.5}
-                  dot={{ r: 2.5, fill: "#3b82f6" }}
+                  dot={{ r: 2.5, fill: "#1e9df1" }}
                   activeDot={{ r: 5 }}
                   isAnimationActive={false}
                 />
@@ -159,9 +171,9 @@ function ResourcesPage() {
                   type="monotone"
                   dataKey="memory"
                   name="Memory %"
-                  stroke="#10b981"
+                  stroke="#00b87a"
                   strokeWidth={2.5}
-                  dot={{ r: 2.5, fill: "#10b981" }}
+                  dot={{ r: 2.5, fill: "#00b87a" }}
                   activeDot={{ r: 5 }}
                   isAnimationActive={false}
                 />

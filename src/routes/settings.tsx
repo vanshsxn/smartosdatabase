@@ -57,19 +57,23 @@ function SettingsPage() {
   const resources = useQuery(resourcesQuery);
   const { rules, saveRules, saving } = useAlerts();
 
-  // Live Database Table Inspector
+  // Live Database Table Inspector with Pagination
   const [selectedTable, setSelectedTable] = useState("job_requests");
+  const [page, setPage] = useState(0);
+  const pageSize = 20;
 
   const dbData = useQuery({
-    queryKey: ["db-inspector", selectedTable],
+    queryKey: ["db-inspector", selectedTable, page],
     queryFn: async () => {
       // 1. Try direct Supabase query
       try {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data, error, count } = await (supabase.from(selectedTable as any) as any)
           .select("*", { count: "exact" })
           .order("created_at", { ascending: false })
-          .limit(50);
+          .range(from, to);
         if (!error && data && data.length > 0) {
           return { rows: (data ?? []) as Record<string, any>[], count: count ?? data.length };
         }
@@ -78,7 +82,7 @@ function SettingsPage() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const fallback = await (supabase.from(selectedTable as any) as any)
             .select("*", { count: "exact" })
-            .limit(50);
+            .range(from, to);
           if (!fallback.error && fallback.data && fallback.data.length > 0) {
             return { rows: (fallback.data ?? []) as Record<string, any>[], count: fallback.count ?? fallback.data.length };
           }
@@ -202,7 +206,13 @@ function SettingsPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <Select value={selectedTable} onValueChange={setSelectedTable}>
+                <Select
+                  value={selectedTable}
+                  onValueChange={(val) => {
+                    setSelectedTable(val);
+                    setPage(0);
+                  }}
+                >
                   <SelectTrigger className="w-56 h-8 text-xs font-mono">
                     <SelectValue placeholder="Select Table" />
                   </SelectTrigger>
@@ -279,8 +289,8 @@ function SettingsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {dbData.data!.rows.map((row, idx) => (
-                        <TableRow key={row.id ?? idx} className="hover:bg-muted/30">
+                      {dbData.data!.rows.map((row: Record<string, any>, idx: number) => (
+                        <TableRow key={row["id"] ?? idx} className="hover:bg-muted/30">
                           {columns.map((col) => {
                             const val = row[col];
                             let rendered = String(val ?? "NULL");
@@ -308,6 +318,38 @@ function SettingsPage() {
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+
+                {/* Database Explorer Pagination Controls */}
+                <div className="flex items-center justify-between px-3 py-2 border-t border-border/60 text-xs text-muted-foreground bg-muted/20">
+                  <span>
+                    Showing {page * pageSize + 1} –{" "}
+                    {Math.min((page + 1) * pageSize, dbData.data?.count ?? 0)} of{" "}
+                    {dbData.data?.count ?? 0} records
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs rounded-full px-3"
+                      disabled={page === 0 || dbData.isFetching}
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <span className="font-mono text-foreground font-medium">
+                      Page {page + 1} of {Math.max(1, Math.ceil((dbData.data?.count ?? 1) / pageSize))}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs rounded-full px-3"
+                      disabled={(page + 1) * pageSize >= (dbData.data?.count ?? 0) || dbData.isFetching}
+                      onClick={() => setPage((p) => p + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}

@@ -130,7 +130,10 @@ async function extractFileContent(f: File): Promise<string> {
               xml = new TextDecoder().decode(rawData);
             } else if (compression === 8 && typeof DecompressionStream !== "undefined") {
               const ds = new DecompressionStream("deflate-raw");
-              xml = await new Response(new Response(rawData).body.pipeThrough(ds)).text();
+              const stream = new Response(rawData).body;
+              if (stream) {
+                xml = await new Response(stream.pipeThrough(ds)).text();
+              }
             }
             const matches =
               xml.match(/<[^>]+:t[^>]*>([^<]+)<\/[^>]+:t>/g) || xml.match(/<t[^>]*>([^<]+)<\/t>/g) || [];
@@ -163,7 +166,7 @@ async function extractFileContent(f: File): Promise<string> {
       const bytes = new Uint8Array(buffer);
       let binary = "";
       for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
+        binary += String.fromCharCode(bytes[i] ?? 0);
       }
       const b64 = btoa(binary);
 
@@ -207,6 +210,7 @@ function SubmitPage() {
   const [input, setInput] = useState("");
   const [sourceLang, setSourceLang] = useState("autodetect");
   const [targetLang, setTargetLang] = useState("Hindi");
+  const [showAiDetails, setShowAiDetails] = useState(false);
   const preset = JOB_PRESETS.find((p) => p.type === type) ?? JOB_PRESETS[0]!;
   const plan = resourcesFor(type, priority);
 
@@ -241,53 +245,28 @@ function SubmitPage() {
 
       const effectiveTenant = ownTenantId || tenantId || "tenant-a";
       const estCredits = estimateCredits(type, priority);
+      // Generate client-side idempotency key to prevent accidental duplicate submission
+      const idempotencyKey = `job-${effectiveTenant}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-      // Feature Four: Ensure database persistence directly to Supabase PostgreSQL
-      try {
-        let authUserId = user?.id;
-        if (!authUserId) {
-          const { data: sess } = await supabase.auth.getSession();
-          if (sess?.session?.user) {
-            authUserId = sess.session.user.id;
-          } else {
-            // Sign in as default verified operator so PostgreSQL RLS succeeds
-            const { data: signData } = await supabase.auth.signInWithPassword({
-              email: "test_operator@example.com",
-              password: "TestPassword123!",
-            });
-            authUserId = signData?.user?.id;
-          }
-        }
-
-        if (authUserId) {
-          await supabase.from("job_requests").insert({
-            user_id: authUserId,
-            tenant_id: effectiveTenant,
-            email: user?.email ?? "operator@smartengine.cloud",
-            name,
-            type,
-            priority,
-            cores: plan.requestedCores,
-            memory_mb: plan.requestedMemoryMb,
-            estimated_ms: runtimeEstimate.totalDurationMs,
-            estimated_credits: estCredits,
-            input: preset.ai ? formattedInput : undefined,
-            status: isAutoApproved(type, priority) ? "RUNNING" : "PENDING",
-          });
-        }
-      } catch (dbErr) {
-        console.warn("Direct DB insert warning:", dbErr);
-      }
-
-      // Feature Six: Credit deduction transaction ledger
+      // Authoritative debit in credit ledger
       await executeCreditDebit({
         tenantId: effectiveTenant,
-        jobId: `job-${Date.now()}`,
+        jobId: idempotencyKey,
         cost: estCredits,
         jobName: name,
+        idempotencyKey,
       });
 
-      return send({ data: { name, type, priority, input: preset.ai ? formattedInput : undefined } });
+      // Authoritative single backend insertion and scheduler admission
+      return send({
+        data: {
+          name,
+          type,
+          priority,
+          input: preset.ai ? formattedInput : undefined,
+          idempotencyKey,
+        },
+      });
     },
     onSuccess: (r) => {
       if (r.auto) {
@@ -330,40 +309,123 @@ function SubmitPage() {
     <AppLayout title="Submit Job">
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle className="text-base">New job</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">New Job</CardTitle></CardHeader>
           <CardContent>
-            <form className="grid gap-4 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); submit.mutate(); }}>
-              <Field label="Job type">
-                <Select value={type} onValueChange={(v) => { setType(v); setName(JOB_PRESETS.find((p) => p.type === v)?.defaultName ?? name); }}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {JOB_PRESETS.map((p) => <SelectItem key={p.type} value={p.type}>{p.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Job name">
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); submit.mutate(); }}>
+              {/* 1. Job Name */}
+              <Field label="Job Name">
                 <Input value={name} onChange={(e) => setName(e.target.value)} required maxLength={60} />
               </Field>
-              <Field label="Priority">
-                <Select value={priority} onValueChange={(v) => setPriority(v as JobPriority)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <div className="flex items-end">
-                <Button type="submit" className="w-full" disabled={submit.isPending}>
-                  {submit.isPending ? "Running…" : isAutoApproved(type, priority) ? "Run job" : "Submit for approval"}
+
+              {/* 2. Job Type */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Job Type">
+                  <Select value={type} onValueChange={(v) => { setType(v); setName(JOB_PRESETS.find((p) => p.type === v)?.defaultName ?? name); }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {JOB_PRESETS.map((p) => <SelectItem key={p.type} value={p.type}>{p.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field label="Priority (User Select)">
+                  <Select value={priority} onValueChange={(v) => setPriority(v as JobPriority)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+
+              {type === "AI_TRANSLATE" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg border border-primary/20 bg-primary/5">
+                  <Field label="Source Language">
+                    <Select value={sourceLang} onValueChange={setSourceLang}>
+                      <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {LANGUAGE_OPTIONS.map((l) => (
+                          <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Target Language">
+                    <Select value={targetLang} onValueChange={setTargetLang}>
+                      <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {LANGUAGE_OPTIONS.filter((l) => l.value !== "autodetect").map((l) => (
+                          <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+              )}
+
+              {/* 3. File Upload / Choose File Input */}
+              {preset.ai && (
+                <div className="space-y-2">
+                  <Label>
+                    {type === "AI_TRANSLATE"
+                      ? `Choose File or Text (${sourceLang} ➔ ${targetLang})`
+                      : preset.ai.inputLabel}
+                  </Label>
+                  {!preset.ai.image && (
+                    <div className="space-y-1.5">
+                      <Input
+                        type="file"
+                        accept={getAcceptedFileExtensions(type)}
+                        onChange={(e) => onFile(e.target.files?.[0])}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Supported: <span className="text-foreground/80 font-medium">{getFileTypeHint(type)}</span>
+                      </p>
+                    </div>
+                  )}
+                  <Textarea
+                    rows={type === "AI_TRANSLATE" ? 4 : 5}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder={
+                      preset.ai.image
+                        ? "e.g. A futuristic data center at sunset, isometric style"
+                        : type === "AI_TRANSLATE"
+                        ? "Enter or paste the text you want translated here..."
+                        : "Type, paste text or upload a file"
+                    }
+                    maxLength={40000}
+                  />
+                </div>
+              )}
+
+              {/* 4. Run Job Button — Positioned directly below Choose File / Input per Section 5A */}
+              <div className="pt-1">
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full rounded-full font-semibold shadow-sm"
+                  disabled={submit.isPending}
+                >
+                  {submit.isPending ? (
+                    <span className="flex items-center gap-2">
+                      <span className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                      Submitting Job…
+                    </span>
+                  ) : isAutoApproved(type, priority) ? (
+                    "Run Job"
+                  ) : (
+                    "Submit for Approval"
+                  )}
                 </Button>
               </div>
 
-              {/* Feature Two: AI-Assisted Priority Recommendation Box */}
-              <div className="sm:col-span-2 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+              {/* 5. Concise AI Priority Recommendation per Section 5B */}
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-primary animate-pulse" />
-                    <span className="text-xs font-semibold text-foreground">AI Priority Recommendation</span>
+                    <span className="text-xs font-semibold text-foreground">AI Recommendation</span>
                     <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">
                       {Math.round(recommendation.confidence * 100)}% Confidence
                     </Badge>
@@ -385,22 +447,40 @@ function SubmitPage() {
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">{recommendation.explanation}</p>
-                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                  {recommendation.factors.map((f, i) => (
-                    <span key={i} className="rounded bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                      • {f}
-                    </span>
-                  ))}
+
+                <div className="text-xs text-foreground font-medium">
+                  • Suggested priority: <strong>{recommendation.suggestedPriority}</strong> · Estimated runtime: <strong>~{(runtimeEstimate.totalDurationMs / 1000).toFixed(1)}s</strong> · CPU: <strong>{plan.requestedCores} core{plan.requestedCores > 1 ? "s" : ""}</strong> · Memory: <strong>{plan.requestedMemoryMb} MB</strong>
+                </div>
+                <p className="text-xs text-muted-foreground leading-normal">
+                  • Reason: {recommendation.explanation}
+                </p>
+
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAiDetails(!showAiDetails)}
+                    className="text-[11px] text-primary hover:underline cursor-pointer"
+                  >
+                    {showAiDetails ? "Hide details ▲" : "View details ▼"}
+                  </button>
+                  {showAiDetails && (
+                    <div className="flex flex-wrap gap-1.5 pt-2">
+                      {recommendation.factors.map((f, i) => (
+                        <span key={i} className="rounded bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          • {f}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Feature Three: AI Estimation of Job Completion Time */}
-              <div className="sm:col-span-2 rounded-lg border border-border bg-card p-3 space-y-2.5">
+              {/* 6. Compact AI Execution-Time Estimation */}
+              <div className="rounded-lg border border-border bg-card p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-cyan-500" />
-                    <span className="text-xs font-semibold text-foreground">AI Completion Time Prediction</span>
+                    <span className="text-xs font-semibold text-foreground">Estimated Execution Time</span>
                   </div>
                   <Badge variant="secondary" className="font-mono text-[10px]">
                     ~{(runtimeEstimate.totalDurationMs / 1000).toFixed(1)}s Wall-Clock
@@ -428,79 +508,24 @@ function SubmitPage() {
                   {runtimeEstimate.explanation}
                 </p>
               </div>
-              {type === "AI_TRANSLATE" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:col-span-2 p-3 rounded-lg border border-primary/20 bg-primary/5">
-                  <Field label="Source Language">
-                    <Select value={sourceLang} onValueChange={setSourceLang}>
-                      <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {LANGUAGE_OPTIONS.map((l) => (
-                          <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field label="Target Language">
-                    <Select value={targetLang} onValueChange={setTargetLang}>
-                      <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {LANGUAGE_OPTIONS.filter((l) => l.value !== "autodetect").map((l) => (
-                          <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                </div>
-              )}
-              {preset.ai && (
-                <div className="space-y-2 sm:col-span-2">
-                  <Label>
-                    {type === "AI_TRANSLATE"
-                      ? `Text to translate (${sourceLang} ➔ ${targetLang})`
-                      : preset.ai.inputLabel}
-                  </Label>
-                  {!preset.ai.image && (
-                    <div className="space-y-1.5">
-                      <Input
-                        type="file"
-                        accept={getAcceptedFileExtensions(type)}
-                        onChange={(e) => onFile(e.target.files?.[0])}
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        Supported: <span className="text-foreground/80 font-medium">{getFileTypeHint(type)}</span>
-                      </p>
-                    </div>
-                  )}
-                  <Textarea
-                    rows={type === "AI_TRANSLATE" ? 6 : 8}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder={
-                      preset.ai.image
-                        ? "e.g. A futuristic data center at sunset, isometric style"
-                        : type === "AI_TRANSLATE"
-                        ? "Enter or paste the text you want translated here..."
-                        : "Type, paste text or upload a file"
-                    }
-                    maxLength={40000}
-                  />
-                </div>
-              )}
-              <div className="rounded-md border border-border bg-muted/30 p-3 text-sm sm:col-span-2">
+
+              {/* 7. Resource Allocation & System Estimate Summary */}
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-xs">
                 <p className="text-muted-foreground">{preset.description}</p>
-                <p className="mt-2">
+                <p className="mt-2 text-foreground font-medium">
                   System allocation: <b>{plan.requestedCores} cores</b> · <b>{plan.requestedMemoryMb} MB</b> · about{" "}
-                  <b>{(plan.estimatedMs / 1000).toFixed(0)} s</b> · est. <b>{estimateCredits(type, priority).toFixed(2)} credits</b>
+                  <b>{(plan.estimatedMs / 1000).toFixed(0)}s</b> · est. <b>{estimateCredits(type, priority).toFixed(2)} credits</b>
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {isAutoApproved(type, priority) ? "Small job — runs immediately, no admin approval needed." : "Larger job — an admin must approve it before it runs."}
+                <p className="mt-1 text-muted-foreground">
+                  {isAutoApproved(type, priority) ? "Small job — runs immediately via MLFQ scheduler, no admin approval needed." : "Larger job — an admin must approve it before it runs."}
                 </p>
               </div>
             </form>
           </CardContent>
         </Card>
+
         <Card>
-          <CardHeader><CardTitle className="text-base">My jobs (live)</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">My Jobs (Live)</CardTitle></CardHeader>
           <CardContent><JobRequestList /></CardContent>
         </Card>
       </div>

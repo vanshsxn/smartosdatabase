@@ -121,7 +121,8 @@ export type SchedulerPanel =
   | "mlfq-levels"
   | "pcb-registry"
   | "policy-metrics"
-  | "scheduling-decisions";
+  | "scheduling-decisions"
+  | "admission-dispatch";
 
 const PROCESS_COLORS = [
   {
@@ -434,16 +435,16 @@ function SchedulerPage() {
     <AppLayout title="Scheduler">
       {/* Feature Eight: 7 Button-Based Navigation Controls using RandomLetterSwap */}
       <div className="space-y-3 mb-2">
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
           <RandomLetterSwap
-            text="Admission & Queue"
+            text="Job Queue"
             isActive={activePanel === "queue"}
             onClick={() => setActivePanel("queue")}
             icon={<Layers className="h-4 w-4" />}
             badge={<Badge variant="outline" className="text-[9px] px-1 py-0">{activeProcesses.length}</Badge>}
           />
           <RandomLetterSwap
-            text="State Machine"
+            text="Process Lifecycle"
             isActive={activePanel === "state-machine"}
             onClick={() => setActivePanel("state-machine")}
             icon={<GitBranch className="h-4 w-4" />}
@@ -457,30 +458,36 @@ function SchedulerPage() {
             badge={paused ? <span className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" /> : undefined}
           />
           <RandomLetterSwap
-            text="MLFQ Levels"
+            text="Scheduling Queues"
             isActive={activePanel === "mlfq-levels"}
             onClick={() => setActivePanel("mlfq-levels")}
             icon={<ListOrdered className="h-4 w-4" />}
             badge={<span className="text-[10px] text-muted-foreground">4 Lvl</span>}
           />
           <RandomLetterSwap
-            text="PCB Registry"
+            text="Process Details"
             isActive={activePanel === "pcb-registry"}
             onClick={() => setActivePanel("pcb-registry")}
             icon={<FileText className="h-4 w-4" />}
             badge={<Badge variant="outline" className="text-[9px] px-1 py-0">{allProcesses.length}</Badge>}
           />
           <RandomLetterSwap
-            text="Policy Metrics"
+            text="Scheduling Performance"
             isActive={activePanel === "policy-metrics"}
             onClick={() => setActivePanel("policy-metrics")}
             icon={<Activity className="h-4 w-4" />}
           />
           <RandomLetterSwap
-            text="Decisions"
+            text="Recent Decisions"
             isActive={activePanel === "scheduling-decisions"}
             onClick={() => setActivePanel("scheduling-decisions")}
             icon={<Clock className="h-4 w-4" />}
+          />
+          <RandomLetterSwap
+            text="Admission & Dispatch"
+            isActive={activePanel === "admission-dispatch"}
+            onClick={() => setActivePanel("admission-dispatch")}
+            icon={<Plus className="h-4 w-4" />}
           />
         </div>
 
@@ -1779,6 +1786,95 @@ function SchedulerPage() {
             )}
           </CardContent>
         </Card>
+        </div>
+      )}
+
+      {/* Feature Eight: Panel 8 - Admission & Dispatch */}
+      {activePanel === "admission-dispatch" && (
+        <div className="max-w-4xl mx-auto space-y-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Plus className="h-4 w-4 text-primary" />
+                    <span>Process Admission & CPU Worker Dispatch</span>
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Admit new jobs directly into the scheduler ready queues and inspect real-time CPU core dispatching.
+                  </p>
+                </div>
+                <Button size="sm" onClick={() => setAddDialogOpen(true)} className="gap-1.5 rounded-full">
+                  <Plus className="h-4 w-4" />
+                  <span>Admit Process</span>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-2 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="rounded-lg border border-border/80 bg-muted/20 p-3">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Active Workers</span>
+                  <p className="text-lg font-bold text-foreground mt-0.5 font-mono">{health.data?.workers ?? 4} Threads</p>
+                </div>
+                <div className="rounded-lg border border-border/80 bg-muted/20 p-3">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Dispatcher State</span>
+                  <p className="text-lg font-bold text-foreground mt-0.5 font-mono">{paused ? "PAUSED (Yielded)" : "ACTIVE (Dispatching)"}</p>
+                </div>
+                <div className="rounded-lg border border-border/80 bg-muted/20 p-3">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Ready Queue Backlog</span>
+                  <p className="text-lg font-bold text-foreground mt-0.5 font-mono">{activeProcesses.length} Processes</p>
+                </div>
+                <div className="rounded-lg border border-border/80 bg-muted/20 p-3">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Admission Policy</span>
+                  <p className="text-lg font-bold text-foreground mt-0.5 font-mono">Dynamic MLFQ Multi-Tenant</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border/80 bg-card p-4 space-y-3">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <Cpu className="h-4 w-4 text-primary" />
+                  <span>CPU Core Dispatch Matrix (Workers 0 – 3)</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[0, 1, 2, 3].map((coreIdx) => {
+                    const runningProcess = allProcesses.filter((p) => getLifecycleState(p.status) === "RUNNING")[coreIdx];
+                    return (
+                      <div
+                        key={coreIdx}
+                        className={`rounded-lg border p-3 transition-all ${
+                          runningProcess
+                            ? "border-primary/50 bg-primary/5"
+                            : "border-border/60 bg-muted/10 opacity-75"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-xs font-mono">
+                          <span className="font-semibold text-foreground">Core #{coreIdx}</span>
+                          <Badge variant={runningProcess ? "default" : "outline"} className="text-[10px] py-0 px-1">
+                            {runningProcess ? "BUSY" : "IDLE"}
+                          </Badge>
+                        </div>
+                        {runningProcess ? (
+                          <div className="mt-2 text-xs space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-bold ${runningProcess.color.badge}`}>
+                                {runningProcess.pid}
+                              </span>
+                              <span className="font-medium truncate text-foreground">{runningProcess.jobName}</span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">
+                              Quantum: {runningProcess.quantumMs}ms · Level: {runningProcess.queueLevel}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground mt-3 italic">Waiting for dispatcher quantum</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
