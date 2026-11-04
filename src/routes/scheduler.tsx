@@ -966,7 +966,7 @@ function SchedulerPage() {
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-[11px] font-medium text-muted-foreground mr-1">Inspect Process:</span>
                     {allProcesses.length > 8 ? (
-                      <Select value={activeSelectedPid ?? undefined} onValueChange={setSelectedPid}>
+                      <Select value={activeSelectedPid ?? ""} onValueChange={setSelectedPid}>
                         <SelectTrigger className="h-7 w-32 text-xs bg-background">
                           <SelectValue placeholder="Pick PID" />
                         </SelectTrigger>
